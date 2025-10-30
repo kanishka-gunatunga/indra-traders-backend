@@ -6,6 +6,7 @@ import {
     getRemindersByDirectRequest, getRemindersBySale, getSaleByTicket, getVehicleDetails,
     listDirectRequests, listSales, updateSaleStatus
 } from "../controllers/fastTrack.controller";
+import {getNearestRemindersBySalesUser} from "../controllers/vehicleSale.controller";
 
 
 const router = Router();
@@ -40,5 +41,7 @@ router.get("/sales/ticket/:ticket", getSaleByTicket);
 
 router.post("/followups", createFollowup);
 router.get("/sales/:saleId/followups", getFollowupsBySale);
+router.get("/sales-user/:userId/reminders/nearest", getNearestRemindersBySalesUser);
+
 
 export default router;

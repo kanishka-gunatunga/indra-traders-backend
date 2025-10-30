@@ -1,6 +1,7 @@
 import {Request, Response} from "express";
 import db from "../models";
 import http from "http-status-codes";
+import {Op} from "sequelize";
 
 const {SparePartSale, SparePartSaleFollowup, SparePartSaleReminder, Customer, User} = db;
 
@@ -214,5 +215,62 @@ export const getRemindersByTicket = async (req: Request, res: Response) => {
     } catch (err) {
         console.error("getRemindersByTicket error:", err);
         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+    }
+};
+
+export const getNearestRemindersBySalesUser = async (req: Request, res: Response) => {
+    try {
+        const {userId} = req.params;
+
+        if (!userId) {
+            return res.status(400).json({message: "User ID is required"});
+        }
+
+        const salesWithReminders = await SparePartSale.findAll({
+            where: {assigned_sales_id: userId},
+            include: [
+                {
+                    model: SparePartSaleReminder,
+                    as: "reminders",
+                    where: {
+                        task_date: {
+                            [Op.gte]: new Date(),
+                        },
+                    },
+                    required: true,
+                    order: [["task_date", "ASC"]],
+                },
+                {
+                    model: Customer,
+                    as: "customer",
+                    attributes: ["customer_name", "phone_number", "email"],
+                },
+            ],
+            order: [[{model: SparePartSaleReminder, as: "reminders"}, "task_date", "ASC"]],
+        });
+
+        const nearestReminders = salesWithReminders.flatMap((sale: any) =>
+            sale.reminders.map((reminder: any) => ({
+                reminder_id: reminder.id,
+                task_title: reminder.task_title,
+                task_date: reminder.task_date,
+                note: reminder.note,
+                sale_id: sale.id,
+                ticket_number: sale.ticket_number,
+                customer_name: sale.customer?.customer_name,
+                contact_number: sale.customer?.phone_number,
+            }))
+        );
+
+        nearestReminders.sort(
+            (a, b) => new Date(a.task_date).getTime() - new Date(b.task_date).getTime()
+        );
+
+        return res.status(200).json({data: nearestReminders});
+    } catch (error: any) {
+        console.error("getNearestRemindersBySalesUser error:", error);
+        return res
+            .status(500)
+            .json({message: "Internal server error", error: error.message});
     }
 };

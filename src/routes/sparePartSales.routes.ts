@@ -6,7 +6,7 @@ import {
     assignToSales,
     assignToMe,
     createFollowup,
-    createReminder, getFollowupsByTicket, getRemindersByTicket, updateSaleStatus
+    createReminder, getFollowupsByTicket, getRemindersByTicket, updateSaleStatus, getNearestRemindersBySalesUser
 } from "../controllers/sparePartSales.controller";
 
 const router = Router();
@@ -22,5 +22,6 @@ router.post("/followups", createFollowup);
 router.post("/reminders", createReminder);
 router.get("/:ticket/followups", getFollowupsByTicket);
 router.get("/:ticket/reminders", getRemindersByTicket);
+router.get("/sales-user/:userId/reminders/nearest", getNearestRemindersBySalesUser);
 
 export default router;

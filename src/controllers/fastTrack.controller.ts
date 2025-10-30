@@ -896,7 +896,7 @@ export const listSales = [
         //     return res.status(httpStatus.FORBIDDEN).json({ message: "Access denied" });
         // }
         try {
-            const { status, assigned_sales_id } = req.query;
+            const {status, assigned_sales_id} = req.query;
             const where: any = {};
             if (status) where.status = status;
             if (assigned_sales_id) where.assigned_sales_id = assigned_sales_id;
@@ -904,8 +904,8 @@ export const listSales = [
             const sales = await FastTrackSale.findAll({
                 where,
                 include: [
-                    { model: Customer, as: "customers", attributes: ["id", "name", "contact_no"] },
-                    { model: User, as: "salesUser", attributes: ["id", "full_name"] },
+                    {model: Customer, as: "customers", attributes: ["id", "name", "contact_no"]},
+                    {model: User, as: "salesUser", attributes: ["id", "full_name"]},
                 ],
                 order: [["createdAt", "DESC"]],
             });
@@ -913,7 +913,7 @@ export const listSales = [
             res.status(httpStatus.OK).json(sales);
         } catch (err) {
             console.error("listSales error:", err);
-            res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
+            res.status(httpStatus.INTERNAL_SERVER_ERROR).json({message: "Server error"});
         }
     },
 ];
@@ -928,20 +928,77 @@ export const updateSaleStatus = [
         //     return res.status(httpStatus.FORBIDDEN).json({ message: "Only sales users can update sale status" });
         // }
         try {
-            const { saleId } = req.params;
-            const { status } = req.body;
+            const {saleId} = req.params;
+            const {status} = req.body;
 
             const sale = await FastTrackSale.findByPk(saleId);
             if (!sale) {
-                return res.status(httpStatus.NOT_FOUND).json({ message: "Sale not found" });
+                return res.status(httpStatus.NOT_FOUND).json({message: "Sale not found"});
             }
 
-            await sale.update({ status });
+            await sale.update({status});
 
-            res.status(httpStatus.OK).json({ message: "Sale status updated", sale });
+            res.status(httpStatus.OK).json({message: "Sale status updated", sale});
         } catch (err) {
             console.error("updateSaleStatus error:", err);
-            res.status(httpStatus.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
+            res.status(httpStatus.INTERNAL_SERVER_ERROR).json({message: "Server error"});
         }
     },
 ];
+
+export const getNearestRemindersBySalesUser = async (req: Request, res: Response) => {
+    try {
+        const {userId} = req.params;
+
+        if (!userId) {
+            return res.status(400).json({message: "User ID is required"});
+        }
+
+        const salesWithReminders = await FastTrackSale.findAll({
+            where: {assigned_sales_id: userId},
+            include: [
+                {
+                    model: FastTrackReminder,
+                    as: "reminders",
+                    where: {
+                        task_date: {
+                            [Op.gte]: new Date(),
+                        },
+                    },
+                    required: true,
+                    order: [["task_date", "ASC"]],
+                },
+                {
+                    model: Customer,
+                    as: "customer",
+                    attributes: ["customer_name", "phone_number", "email"],
+                },
+            ],
+            order: [[{model: FastTrackReminder, as: "reminders"}, "task_date", "ASC"]],
+        });
+
+        const nearestReminders = salesWithReminders.flatMap((sale: any) =>
+            sale.reminders.map((reminder: any) => ({
+                reminder_id: reminder.id,
+                task_title: reminder.task_title,
+                task_date: reminder.task_date,
+                note: reminder.note,
+                sale_id: sale.id,
+                ticket_number: sale.ticket_number,
+                customer_name: sale.customer?.customer_name,
+                contact_number: sale.customer?.phone_number,
+            }))
+        );
+
+        nearestReminders.sort(
+            (a, b) => new Date(a.task_date).getTime() - new Date(b.task_date).getTime()
+        );
+
+        return res.status(200).json({data: nearestReminders});
+    } catch (error: any) {
+        console.error("getNearestRemindersBySalesUser error:", error);
+        return res
+            .status(500)
+            .json({message: "Internal server error", error: error.message});
+    }
+};
