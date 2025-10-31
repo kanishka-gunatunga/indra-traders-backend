@@ -28,6 +28,7 @@ import ServiceParkVehicleHistoryModel from "./serviceParkVehicleHistory.model";
 import ServiceParkSaleModel from "./serviceParkSale.model";
 import ServiceParkSaleFollowupModel from "./serviceParkFollowup.model";
 import ServiceParkSaleReminderModel from "./serviceParkReminder.model";
+import TestModel from "./test.model";
 
 const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
     host: dbConfig.HOST,
@@ -70,6 +71,7 @@ const ServiceParkVehicleHistory = ServiceParkVehicleHistoryModel(sequelize);
 const ServiceParkSale = ServiceParkSaleModel(sequelize);
 const ServiceParkSaleReminder = ServiceParkSaleReminderModel(sequelize);
 const ServiceParkSaleFollowUp = ServiceParkSaleFollowupModel(sequelize);
+const Test = TestModel(sequelize);
 
 interface DB {
     Sequelize: typeof Sequelize;
@@ -101,6 +103,7 @@ interface DB {
     ServiceParkSale: typeof ServiceParkSale;
     ServiceParkSaleReminder: typeof ServiceParkSaleReminder;
     ServiceParkSaleFollowUp: typeof ServiceParkSaleFollowUp;
+    Test: typeof Test;
 }
 
 
@@ -145,6 +148,8 @@ db.ServiceParkVehicleHistory = ServiceParkVehicleHistory;
 db.ServiceParkSale = ServiceParkSale;
 db.ServiceParkSaleFollowUp = ServiceParkSaleFollowUp;
 db.ServiceParkSaleReminder = ServiceParkSaleReminder;
+
+db.Test = Test;
 
 
 db.Customer.hasMany(db.Complaint, {foreignKey: "customerId", as: "complaints"});
