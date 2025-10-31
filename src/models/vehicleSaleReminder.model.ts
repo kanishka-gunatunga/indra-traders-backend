@@ -1,6 +1,6 @@
 import {DataTypes, Model, Optional, Sequelize} from "sequelize";
 
-export interface ReminderAttributes {
+export interface VehicleSaleReminderAttributes {
     id: number;
     task_title: string;
     task_date: Date;
@@ -10,10 +10,10 @@ export interface ReminderAttributes {
     updatedAt?: Date;
 }
 
-export type ReminderCreationAttributes = Optional<ReminderAttributes, "id" | "note" | "createdAt" | "updatedAt">;
+export type ReminderCreationAttributes = Optional<VehicleSaleReminderAttributes, "id" | "note" | "createdAt" | "updatedAt">;
 
-class Reminder extends Model<ReminderAttributes, ReminderCreationAttributes>
-    implements ReminderAttributes {
+class VehicleSaleReminder extends Model<VehicleSaleReminderAttributes, ReminderCreationAttributes>
+    implements VehicleSaleReminderAttributes {
     public id!: number;
     public task_title!: string;
     public task_date!: Date;
@@ -25,7 +25,7 @@ class Reminder extends Model<ReminderAttributes, ReminderCreationAttributes>
 }
 
 export default (sequelize: Sequelize) => {
-    Reminder.init(
+    VehicleSaleReminder.init(
         {
             id: {
                 type: DataTypes.INTEGER.UNSIGNED,
@@ -59,5 +59,5 @@ export default (sequelize: Sequelize) => {
         }
     );
 
-    return Reminder;
+    return VehicleSaleReminder;
 };
