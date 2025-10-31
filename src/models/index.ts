@@ -1,3 +1,4 @@
+import "mysql2";
 import {Sequelize} from "sequelize";
 import dbConfig from "../config/db.config";
 import CustomerModel from "./customer.model";
