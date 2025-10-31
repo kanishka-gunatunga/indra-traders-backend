@@ -2,15 +2,12 @@
   "version": 2,
   "builds": [
     {
-      "src": "src/app.ts",
+      "src": "api/index.ts",
       "use": "@vercel/node",
-      "config": { "includeFiles": ["src/**/*"] }
+      "config": { "includeFiles": ["src/**/*", "node_modules/mysql2/**/*"] }
     }
   ],
   "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "src/app.ts"
-    }
+    { "src": "/(.*)", "dest": "api/index.ts" }
   ]
 }
