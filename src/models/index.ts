@@ -28,7 +28,9 @@ import ServiceParkVehicleHistoryModel from "./serviceParkVehicleHistory.model";
 import ServiceParkSaleModel from "./serviceParkSale.model";
 import ServiceParkSaleFollowupModel from "./serviceParkFollowup.model";
 import ServiceParkSaleReminderModel from "./serviceParkReminder.model";
-import TestModel from "./test.model";
+import UnavailableServiceModel from "./unavailableService.model";
+import UnavailableSparePartModel from "./unavailableSparePart.model";
+import UnavailableVehicleSaleModel from "./unavailableVehicleSale.model";
 
 const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
     host: dbConfig.HOST,
@@ -71,7 +73,9 @@ const ServiceParkVehicleHistory = ServiceParkVehicleHistoryModel(sequelize);
 const ServiceParkSale = ServiceParkSaleModel(sequelize);
 const ServiceParkSaleReminder = ServiceParkSaleReminderModel(sequelize);
 const ServiceParkSaleFollowUp = ServiceParkSaleFollowupModel(sequelize);
-const Test = TestModel(sequelize);
+const UnavailableService = UnavailableServiceModel(sequelize);
+const UnavailableSparePart = UnavailableSparePartModel(sequelize);
+const UnavailableVehicleSale = UnavailableVehicleSaleModel(sequelize);
 
 interface DB {
     Sequelize: typeof Sequelize;
@@ -103,7 +107,9 @@ interface DB {
     ServiceParkSale: typeof ServiceParkSale;
     ServiceParkSaleReminder: typeof ServiceParkSaleReminder;
     ServiceParkSaleFollowUp: typeof ServiceParkSaleFollowUp;
-    Test: typeof Test;
+    UnavailableService: typeof UnavailableService;
+    UnavailableSparePart: typeof UnavailableSparePart;
+    UnavailableVehicleSale: typeof UnavailableVehicleSale;
 }
 
 
@@ -149,8 +155,11 @@ db.ServiceParkSale = ServiceParkSale;
 db.ServiceParkSaleFollowUp = ServiceParkSaleFollowUp;
 db.ServiceParkSaleReminder = ServiceParkSaleReminder;
 
-db.Test = Test;
 
+// unavailable
+db.UnavailableSparePart = UnavailableSparePart;
+db.UnavailableVehicleSale = UnavailableVehicleSale;
+db.UnavailableService = UnavailableService;
 
 db.Customer.hasMany(db.Complaint, {foreignKey: "customerId", as: "complaints"});
 db.Complaint.belongsTo(db.Customer, {foreignKey: "customerId", as: "customer"});
@@ -200,41 +209,77 @@ db.SpareInvoiceItem.belongsTo(db.SpareInvoice, {foreignKey: "invoice_id", as: "i
 
 // fast track
 
-db.Customer.hasMany(db.FastTrackRequest, {foreignKey: "customer_id"});
+// db.Customer.hasMany(db.FastTrackRequest, {foreignKey: "customer_id"});
+// db.FastTrackRequest.belongsTo(db.Customer, {foreignKey: "customer_id", as: "customer"});
+//
+// db.User.hasMany(db.FastTrackRequest, {foreignKey: "call_agent_id"});
+// db.FastTrackRequest.belongsTo(db.User, {as: "callAgent", foreignKey: "call_agent_id"});
+//
+// db.Customer.hasMany(db.FastTrackSale, {foreignKey: "customer_id"});
+// db.FastTrackSale.belongsTo(db.Customer, {foreignKey: "customer_id"});
+//
+// db.VehicleListing.hasMany(db.FastTrackSale, {foreignKey: "vehicle_id"});
+// db.FastTrackSale.belongsTo(db.VehicleListing, {foreignKey: "vehicle_id"});
+//
+// db.FastTrackRequest.hasMany(db.FastTrackSale, {foreignKey: "direct_request_id"});
+// db.FastTrackSale.belongsTo(db.FastTrackRequest, {foreignKey: "direct_request_id"});
+//
+// db.User.hasMany(db.FastTrackSale, {foreignKey: "call_agent_id"});
+// db.FastTrackSale.belongsTo(db.User, {as: "callAgent", foreignKey: "call_agent_id"});
+//
+// db.User.hasMany(db.FastTrackSale, {foreignKey: "assigned_sales_id"});
+// db.FastTrackSale.belongsTo(db.User, {as: "salesUser", foreignKey: "assigned_sales_id"});
+//
+// db.FastTrackSale.hasMany(db.FastTrackFollowup, {foreignKey: "sale_id"});
+// db.FastTrackFollowup.belongsTo(db.FastTrackSale, {foreignKey: "sale_id"});
+//
+// db.FastTrackSale.hasMany(db.FastTrackReminder, {foreignKey: "sale_id"});
+// db.FastTrackReminder.belongsTo(db.FastTrackSale, {foreignKey: "sale_id"});
+//
+// db.FastTrackRequest.hasMany(db.FastTrackReminder, {foreignKey: "direct_request_id"});
+// db.FastTrackReminder.belongsTo(db.FastTrackRequest, {foreignKey: "direct_request_id"});
+//
+// db.FastTrackRequest.hasMany(db.FastTrackBestMatch, {foreignKey: "direct_request_id"});
+// db.FastTrackBestMatch.belongsTo(db.FastTrackRequest, {foreignKey: "direct_request_id"});
+//
+// db.VehicleListing.hasMany(db.FastTrackBestMatch, {foreignKey: "vehicle_id"});
+// db.FastTrackBestMatch.belongsTo(db.VehicleListing, {foreignKey: "vehicle_id"});
+
+db.Customer.hasMany(db.FastTrackRequest, {foreignKey: "customer_id", as: "fastTrackRequests"});
 db.FastTrackRequest.belongsTo(db.Customer, {foreignKey: "customer_id", as: "customer"});
 
-db.User.hasMany(db.FastTrackRequest, {foreignKey: "call_agent_id"});
-db.FastTrackRequest.belongsTo(db.User, {as: "callAgent", foreignKey: "call_agent_id"});
+db.User.hasMany(db.FastTrackRequest, {foreignKey: "call_agent_id", as: "createdRequests"});
+db.FastTrackRequest.belongsTo(db.User, {foreignKey: "call_agent_id", as: "callAgent"});
 
-db.Customer.hasMany(db.FastTrackSale, {foreignKey: "customer_id"});
-db.FastTrackSale.belongsTo(db.Customer, {foreignKey: "customer_id"});
+db.FastTrackRequest.hasMany(db.FastTrackBestMatch, {foreignKey: "direct_request_id", as: "bestMatches"});
+db.FastTrackBestMatch.belongsTo(db.FastTrackRequest, {foreignKey: "direct_request_id", as: "directRequest"});
 
-db.VehicleListing.hasMany(db.FastTrackSale, {foreignKey: "vehicle_id"});
-db.FastTrackSale.belongsTo(db.VehicleListing, {foreignKey: "vehicle_id"});
+db.VehicleListing.hasMany(db.FastTrackBestMatch, {foreignKey: "vehicle_id", as: "bestMatches"});
+db.FastTrackBestMatch.belongsTo(db.VehicleListing, {foreignKey: "vehicle_id", as: "vehicle"});
 
-db.FastTrackRequest.hasMany(db.FastTrackSale, {foreignKey: "direct_request_id"});
-db.FastTrackSale.belongsTo(db.FastTrackRequest, {foreignKey: "direct_request_id"});
+db.FastTrackRequest.hasMany(db.FastTrackReminder, {foreignKey: "direct_request_id", as: "reminders"});
+db.FastTrackReminder.belongsTo(db.FastTrackRequest, {foreignKey: "direct_request_id", as: "directRequest"});
 
-db.User.hasMany(db.FastTrackSale, {foreignKey: "call_agent_id"});
-db.FastTrackSale.belongsTo(db.User, {as: "callAgent", foreignKey: "call_agent_id"});
+db.Customer.hasMany(db.FastTrackSale, {foreignKey: "customer_id", as: "fastTrackSales"});
+db.FastTrackSale.belongsTo(db.Customer, {foreignKey: "customer_id", as: "customer"});
 
-db.User.hasMany(db.FastTrackSale, {foreignKey: "assigned_sales_id"});
-db.FastTrackSale.belongsTo(db.User, {as: "salesUser", foreignKey: "assigned_sales_id"});
+db.VehicleListing.hasMany(db.FastTrackSale, {foreignKey: "vehicle_id", as: "sales"});
+db.FastTrackSale.belongsTo(db.VehicleListing, {foreignKey: "vehicle_id", as: "vehicle"});
 
-db.FastTrackSale.hasMany(db.FastTrackFollowup, {foreignKey: "sale_id"});
-db.FastTrackFollowup.belongsTo(db.FastTrackSale, {foreignKey: "sale_id"});
+db.FastTrackRequest.hasMany(db.FastTrackSale, {foreignKey: "direct_request_id", as: "sales"});
+db.FastTrackSale.belongsTo(db.FastTrackRequest, {foreignKey: "direct_request_id", as: "directRequest"});
 
-db.FastTrackSale.hasMany(db.FastTrackReminder, {foreignKey: "sale_id"});
-db.FastTrackReminder.belongsTo(db.FastTrackSale, {foreignKey: "sale_id"});
+db.User.hasMany(db.FastTrackSale, {foreignKey: "call_agent_id", as: "calledSales"});
+db.FastTrackSale.belongsTo(db.User, {foreignKey: "call_agent_id", as: "callAgent"});
 
-db.FastTrackRequest.hasMany(db.FastTrackReminder, {foreignKey: "direct_request_id"});
-db.FastTrackReminder.belongsTo(db.FastTrackRequest, {foreignKey: "direct_request_id"});
+db.User.hasMany(db.FastTrackSale, {foreignKey: "assigned_sales_id", as: "assignedSales"});
+db.FastTrackSale.belongsTo(db.User, {foreignKey: "assigned_sales_id", as: "salesUser"});
 
-db.FastTrackRequest.hasMany(db.FastTrackBestMatch, {foreignKey: "direct_request_id"});
-db.FastTrackBestMatch.belongsTo(db.FastTrackRequest, {foreignKey: "direct_request_id"});
+db.FastTrackSale.hasMany(db.FastTrackFollowup, {foreignKey: "sale_id", as: "followups"});
+db.FastTrackFollowup.belongsTo(db.FastTrackSale, {foreignKey: "sale_id", as: "sale"});
 
-db.VehicleListing.hasMany(db.FastTrackBestMatch, {foreignKey: "vehicle_id"});
-db.FastTrackBestMatch.belongsTo(db.VehicleListing, {foreignKey: "vehicle_id"});
+db.FastTrackSale.hasMany(db.FastTrackReminder, {foreignKey: "sale_id", as: "reminders"});
+db.FastTrackReminder.belongsTo(db.FastTrackSale, {foreignKey: "sale_id", as: "sale"});
 
 
 // service park
