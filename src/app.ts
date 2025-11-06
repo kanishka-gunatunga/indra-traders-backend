@@ -14,6 +14,7 @@ import sparePartSalesRoutes from "./routes/sparePartSales.routes";
 import spareInvoiceRoutes from "./routes/spareInvoice.routes";
 import fastTrackRoutes from "./routes/fastTrack.routes";
 import serviceParkRoutes from "./routes/servicePark.routes";
+import unavailableRoutes from "./routes/unavailable.routes";
 
 const app = express();
 
@@ -39,5 +40,6 @@ app.use("/api/v1/spare-part-sales", sparePartSalesRoutes);
 app.use("/api/v1/spare-part-invoices", spareInvoiceRoutes);
 app.use("/api/v1/fast-track", fastTrackRoutes);
 app.use("/api/v1/service-park", serviceParkRoutes);
+app.use("/api/v1/unavailable", unavailableRoutes);
 
 export default app;

@@ -306,4 +306,14 @@ db.ServiceParkSale.hasMany(db.ServiceParkSaleReminder, {foreignKey: "service_par
 db.ServiceParkSaleReminder.belongsTo(db.ServiceParkSale, {foreignKey: "service_park_sale_id", as: "sale"});
 
 
+db.User.hasMany(db.UnavailableVehicleSale, {foreignKey: "call_agent_id", as: "unavailableVehicleCalls"});
+db.UnavailableVehicleSale.belongsTo(db.User, {foreignKey: "call_agent_id", as: "callAgent"});
+
+db.User.hasMany(db.UnavailableService, {foreignKey: "call_agent_id", as: "unavailableServiceCalls"});
+db.UnavailableService.belongsTo(db.User, {foreignKey: "call_agent_id", as: "callAgent"});
+
+db.User.hasMany(db.UnavailableSparePart, {foreignKey: "call_agent_id", as: "unavailableSpareCalls"});
+db.UnavailableSparePart.belongsTo(db.User, {foreignKey: "call_agent_id", as: "callAgent"});
+
+
 export default db;
