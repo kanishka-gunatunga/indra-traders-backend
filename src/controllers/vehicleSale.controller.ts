@@ -236,3 +236,28 @@ export const getNearestRemindersBySalesUser = async (req: Request, res: Response
             .json({message: "Internal server error", error: error.message});
     }
 };
+
+export const updatePriority = async (req: Request, res: Response) => {
+    try {
+        const {id} = req.params;
+        const {priority} = req.body;
+
+        if (priority === undefined || isNaN(priority)) {
+            return res.status(400).json({message: "Valid priority is required"});
+        }
+
+        const sale = await VehicleSale.findByPk(id);
+
+        if (!sale) {
+            return res.status(404).json({message: "Sale not found"});
+        }
+
+        sale.priority = priority;
+        await sale.save();
+
+        return res.status(200).json({message: "Priority updated", sale});
+    } catch (err) {
+        console.error("updatePriority error:", err);
+        res.status(500).json({message: "Server error"});
+    }
+};

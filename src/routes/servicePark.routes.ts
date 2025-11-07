@@ -4,7 +4,8 @@ import {
     assignToSalesAgent,
     getSaleDetails, handleServiceIntake, listVehicleHistories, getVehicleHistoryByNumber,
     listServiceParkSales, getSaleDetailsByTicket, updateSaleStatus, createFollowup, createReminder,
-    getNearestRemindersBySalesUser
+    getNearestRemindersBySalesUser,
+    updatePriority
 } from "../controllers/servicePark.controller";
 
 const router = Router();
@@ -22,5 +23,7 @@ router.get("/sales/:ticketNumber", getSaleDetailsByTicket);
 router.put("/sales/:id/status", updateSaleStatus)
 router.get("/:vehicleNo", getVehicleHistoryByNumber);
 router.get("/sales-user/:userId/reminders/nearest", getNearestRemindersBySalesUser);
+
+router.put("/priority/:id", updatePriority);
 
 export default router;
