@@ -31,6 +31,8 @@ import ServiceParkSaleReminderModel from "./serviceParkReminder.model";
 import UnavailableServiceModel from "./unavailableService.model";
 import UnavailableSparePartModel from "./unavailableSparePart.model";
 import UnavailableVehicleSaleModel from "./unavailableVehicleSale.model";
+import ChatSessionModel from "./chatSession.model";
+import ChatMessageModel from "./chatMessage.model";
 
 const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
     host: dbConfig.HOST,
@@ -76,6 +78,8 @@ const ServiceParkSaleFollowUp = ServiceParkSaleFollowupModel(sequelize);
 const UnavailableService = UnavailableServiceModel(sequelize);
 const UnavailableSparePart = UnavailableSparePartModel(sequelize);
 const UnavailableVehicleSale = UnavailableVehicleSaleModel(sequelize);
+const ChatSession = ChatSessionModel(sequelize);
+const ChatMessage = ChatMessageModel(sequelize);
 
 interface DB {
     Sequelize: typeof Sequelize;
@@ -110,6 +114,8 @@ interface DB {
     UnavailableService: typeof UnavailableService;
     UnavailableSparePart: typeof UnavailableSparePart;
     UnavailableVehicleSale: typeof UnavailableVehicleSale;
+    ChatMessage: typeof ChatMessage;
+    ChatSession: typeof ChatSession;
 }
 
 
@@ -160,6 +166,10 @@ db.ServiceParkSaleReminder = ServiceParkSaleReminder;
 db.UnavailableSparePart = UnavailableSparePart;
 db.UnavailableVehicleSale = UnavailableVehicleSale;
 db.UnavailableService = UnavailableService;
+
+// chat
+db.ChatMessage = ChatMessage;
+db.ChatSession = ChatSession;
 
 db.Customer.hasMany(db.Complaint, {foreignKey: "customerId", as: "complaints"});
 db.Complaint.belongsTo(db.Customer, {foreignKey: "customerId", as: "customer"});
@@ -284,41 +294,41 @@ db.SpareInvoiceItem.belongsTo(db.SpareInvoice, {foreignKey: "invoice_id", as: "i
 // db.FastTrackSale.hasMany(db.FastTrackReminder, {foreignKey: "sale_id", as: "reminders"});
 // db.FastTrackReminder.belongsTo(db.FastTrackSale, {foreignKey: "sale_id", as: "sale"});
 
-db.Customer.hasMany(db.FastTrackRequest, { foreignKey: "customer_id" });
-db.FastTrackRequest.belongsTo(db.Customer, { foreignKey: "customer_id", as: "customer" });
+db.Customer.hasMany(db.FastTrackRequest, {foreignKey: "customer_id"});
+db.FastTrackRequest.belongsTo(db.Customer, {foreignKey: "customer_id", as: "customer"});
 
-db.User.hasMany(db.FastTrackRequest, { foreignKey: "call_agent_id" });
-db.FastTrackRequest.belongsTo(db.User, { foreignKey: "call_agent_id", as: "callAgent" });
+db.User.hasMany(db.FastTrackRequest, {foreignKey: "call_agent_id"});
+db.FastTrackRequest.belongsTo(db.User, {foreignKey: "call_agent_id", as: "callAgent"});
 
-db.FastTrackRequest.hasMany(db.FastTrackBestMatch, { foreignKey: "direct_request_id", as: "bestMatches" });
-db.FastTrackBestMatch.belongsTo(db.FastTrackRequest, { foreignKey: "direct_request_id" });
+db.FastTrackRequest.hasMany(db.FastTrackBestMatch, {foreignKey: "direct_request_id", as: "bestMatches"});
+db.FastTrackBestMatch.belongsTo(db.FastTrackRequest, {foreignKey: "direct_request_id"});
 
-db.VehicleListing.hasMany(db.FastTrackBestMatch, { foreignKey: "vehicle_id" });
-db.FastTrackBestMatch.belongsTo(db.VehicleListing, { foreignKey: "vehicle_id", as: "vehicle" });
+db.VehicleListing.hasMany(db.FastTrackBestMatch, {foreignKey: "vehicle_id"});
+db.FastTrackBestMatch.belongsTo(db.VehicleListing, {foreignKey: "vehicle_id", as: "vehicle"});
 
-db.Customer.hasMany(db.FastTrackSale, { foreignKey: "customer_id" });
-db.FastTrackSale.belongsTo(db.Customer, { foreignKey: "customer_id", as: "customer" });
+db.Customer.hasMany(db.FastTrackSale, {foreignKey: "customer_id"});
+db.FastTrackSale.belongsTo(db.Customer, {foreignKey: "customer_id", as: "customer"});
 
-db.VehicleListing.hasMany(db.FastTrackSale, { foreignKey: "vehicle_id" });
-db.FastTrackSale.belongsTo(db.VehicleListing, { foreignKey: "vehicle_id", as: "vehicle" });
+db.VehicleListing.hasMany(db.FastTrackSale, {foreignKey: "vehicle_id"});
+db.FastTrackSale.belongsTo(db.VehicleListing, {foreignKey: "vehicle_id", as: "vehicle"});
 
-db.FastTrackRequest.hasMany(db.FastTrackSale, { foreignKey: "direct_request_id" });
-db.FastTrackSale.belongsTo(db.FastTrackRequest, { foreignKey: "direct_request_id", as: "directRequest" });
+db.FastTrackRequest.hasMany(db.FastTrackSale, {foreignKey: "direct_request_id"});
+db.FastTrackSale.belongsTo(db.FastTrackRequest, {foreignKey: "direct_request_id", as: "directRequest"});
 
-db.User.hasMany(db.FastTrackSale, { foreignKey: "call_agent_id" });
-db.FastTrackSale.belongsTo(db.User, { foreignKey: "call_agent_id", as: "callAgent" });
+db.User.hasMany(db.FastTrackSale, {foreignKey: "call_agent_id"});
+db.FastTrackSale.belongsTo(db.User, {foreignKey: "call_agent_id", as: "callAgent"});
 
-db.User.hasMany(db.FastTrackSale, { foreignKey: "assigned_sales_id" });
-db.FastTrackSale.belongsTo(db.User, { foreignKey: "assigned_sales_id", as: "salesUser" });
+db.User.hasMany(db.FastTrackSale, {foreignKey: "assigned_sales_id"});
+db.FastTrackSale.belongsTo(db.User, {foreignKey: "assigned_sales_id", as: "salesUser"});
 
-db.FastTrackSale.hasMany(db.FastTrackFollowup, { foreignKey: "sale_id", as: "followups" });
-db.FastTrackFollowup.belongsTo(db.FastTrackSale, { foreignKey: "sale_id", as: "sale" });
+db.FastTrackSale.hasMany(db.FastTrackFollowup, {foreignKey: "sale_id", as: "followups"});
+db.FastTrackFollowup.belongsTo(db.FastTrackSale, {foreignKey: "sale_id", as: "sale"});
 
-db.FastTrackSale.hasMany(db.FastTrackReminder, { foreignKey: "sale_id", as: "saleReminders" });
-db.FastTrackReminder.belongsTo(db.FastTrackSale, { foreignKey: "sale_id", as: "sale" });
+db.FastTrackSale.hasMany(db.FastTrackReminder, {foreignKey: "sale_id", as: "saleReminders"});
+db.FastTrackReminder.belongsTo(db.FastTrackSale, {foreignKey: "sale_id", as: "sale"});
 
-db.FastTrackRequest.hasMany(db.FastTrackReminder, { foreignKey: "direct_request_id", as: "directReminders" });
-db.FastTrackReminder.belongsTo(db.FastTrackRequest, { foreignKey: "direct_request_id", as: "directRequest" });
+db.FastTrackRequest.hasMany(db.FastTrackReminder, {foreignKey: "direct_request_id", as: "directReminders"});
+db.FastTrackReminder.belongsTo(db.FastTrackRequest, {foreignKey: "direct_request_id", as: "directRequest"});
 
 
 // service park
@@ -353,6 +363,27 @@ db.UnavailableService.belongsTo(db.User, {foreignKey: "call_agent_id", as: "call
 
 db.User.hasMany(db.UnavailableSparePart, {foreignKey: "call_agent_id", as: "unavailableSpareCalls"});
 db.UnavailableSparePart.belongsTo(db.User, {foreignKey: "call_agent_id", as: "callAgent"});
+
+// chat
+// db.ChatSession.belongsTo(db.User, {foreignKey: "agent_id", as: "agent"});
+// db.User.hasMany(db.ChatSession, {foreignKey: "agent_id", as: "assignedChats"});
+//
+// db.ChatSession.hasMany(db.ChatMessage, {foreignKey: "chat_id", sourceKey: "chat_id", as: "messages"});
+// db.ChatMessage.belongsTo(db.ChatSession, {foreignKey: "chat_id", targetKey: "chat_id", as: "session"});
+
+db.ChatSession.belongsTo(db.User, { foreignKey: "agent_id", as: "agent" });
+db.User.hasMany(db.ChatSession, { foreignKey: "agent_id", as: "assignedChats" });
+
+db.ChatSession.hasMany(db.ChatMessage, {
+    foreignKey: "chat_id",
+    sourceKey: "chat_id",
+    as: "messages",
+});
+db.ChatMessage.belongsTo(db.ChatSession, {
+    foreignKey: "chat_id",
+    targetKey: "chat_id",
+    as: "session",
+});
 
 
 export default db;

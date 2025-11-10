@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import http from "http";
 import userRoutes from "./routes/user.routes";
 import complaintRoutes from "./routes/complaint.routes";
 import customerRoutes from "./routes/customer.routes";
@@ -15,12 +16,21 @@ import spareInvoiceRoutes from "./routes/spareInvoice.routes";
 import fastTrackRoutes from "./routes/fastTrack.routes";
 import serviceParkRoutes from "./routes/servicePark.routes";
 import unavailableRoutes from "./routes/unavailable.routes";
+import chatRoutes from "./routes/chat.routes";
+import initSocket from "./realtime/socket";
+import {Server} from "socket.io";
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({extended: true}));
+
+const httpServer = http.createServer(app);
+const io = new Server(httpServer, {
+    cors: { origin: "*" },
+});
+initSocket(io);
 
 app.get("/", (req, res) => {
     res.json({message: "Hello World!"});
@@ -41,5 +51,6 @@ app.use("/api/v1/spare-part-invoices", spareInvoiceRoutes);
 app.use("/api/v1/fast-track", fastTrackRoutes);
 app.use("/api/v1/service-park", serviceParkRoutes);
 app.use("/api/v1/unavailable", unavailableRoutes);
+app.use("/api/v1/chat", chatRoutes);
 
 export default app;
