@@ -19,8 +19,15 @@ import unavailableRoutes from "./routes/unavailable.routes";
 import chatRoutes from "./routes/chat.routes";
 import initSocket from "./realtime/socket";
 import {Server} from "socket.io";
+// import path from "node:path";
+// import indexRouter from './routes/index';
 
 const app = express();
+
+// app.set('views', path.join(__dirname, 'views'));
+// app.set('view engine', 'ejs');
+//
+// app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(cors());
 app.use(express.json());
@@ -35,6 +42,9 @@ initSocket(io);
 app.get("/", (req, res) => {
     res.json({message: "Hello World!"});
 });
+
+
+// app.use('/', indexRouter);
 
 app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/complaints", complaintRoutes);

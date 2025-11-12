@@ -74,7 +74,7 @@
 //     return ChatMessage;
 // };
 
-import { DataTypes, Model, Optional, Sequelize } from "sequelize";
+import {DataTypes, Model, Optional, Sequelize} from "sequelize";
 
 export interface ChatMsgAttr {
     id: number;
@@ -86,7 +86,8 @@ export interface ChatMsgAttr {
     updatedAt?: Date;
 }
 
-export interface ChatMsgCreateAttr extends Optional<ChatMsgAttr, "id" | "createdAt" | "updatedAt"> {}
+export interface ChatMsgCreateAttr extends Optional<ChatMsgAttr, "id" | "createdAt" | "updatedAt"> {
+}
 
 export class ChatMessage extends Model<ChatMsgAttr, ChatMsgCreateAttr> implements ChatMsgAttr {
     public id!: number;
@@ -101,11 +102,11 @@ export class ChatMessage extends Model<ChatMsgAttr, ChatMsgCreateAttr> implement
 export default (sequelize: Sequelize) => {
     ChatMessage.init(
         {
-            id: { type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true },
-            chat_id: { type: DataTypes.STRING, allowNull: false },
-            sender: { type: DataTypes.ENUM("customer", "bot", "agent"), allowNull: false },
-            message: { type: DataTypes.TEXT, allowNull: false },
-            viewed_by_agent: { type: DataTypes.ENUM("yes", "no"), defaultValue: "no" },
+            id: {type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true},
+            chat_id: {type: DataTypes.STRING, allowNull: false},
+            sender: {type: DataTypes.ENUM("customer", "bot", "agent"), allowNull: false},
+            message: {type: DataTypes.TEXT, allowNull: false},
+            viewed_by_agent: {type: DataTypes.ENUM("yes", "no"), defaultValue: "no"},
         },
         {
             sequelize,

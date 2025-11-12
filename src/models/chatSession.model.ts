@@ -95,8 +95,8 @@ export default (sequelize: Sequelize) => {
             channel: {type: DataTypes.ENUM("Web", "WhatsApp", "Facebook", "Other")},
             last_message_at: {type: DataTypes.DATE, allowNull: true},
             unread_count: {type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0},
-            agent_rating: { type: DataTypes.INTEGER, allowNull: true },
-            rating_message: { type: DataTypes.TEXT, allowNull: true },
+            agent_rating: {type: DataTypes.INTEGER, allowNull: true},
+            rating_message: {type: DataTypes.TEXT, allowNull: true},
         },
         {sequelize, tableName: "chat_sessions", timestamps: true}
     );
