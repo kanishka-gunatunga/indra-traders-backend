@@ -1,4 +1,4 @@
-import { Router } from "express";
+import {Router} from "express";
 import * as Chat from "../controllers/chat.controller";
 
 const r = Router();

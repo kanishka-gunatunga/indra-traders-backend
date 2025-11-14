@@ -129,26 +129,55 @@ export const myAssigned = async (req: Request, res: Response) => {
     }
 };
 
+// export const rateAgent = async (req: Request, res: Response) => {
+//     try {
+//         const {chat_id} = req.params;
+//         const {rating, message} = req.body;
+//
+//         if (!rating || rating < 1 || rating > 5) {
+//             return res.status(http.BAD_REQUEST).json({message: "Invalid rating"});
+//         }
+//
+//         const session = await db.ChatSession.findOne({where: {chat_id}});
+//         if (!session) return res.status(http.NOT_FOUND).json({message: "Chat not found"});
+//
+//         await session.update({
+//             agent_rating: rating,
+//             rating_message: message || null
+//         });
+//
+//         return res.status(http.OK).json({message: "Thank you for your feedback!"});
+//     } catch (e) {
+//         console.error("rateAgent", e);
+//         return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+//     }
+// };
+
 export const rateAgent = async (req: Request, res: Response) => {
     try {
         const {chat_id} = req.params;
         const {rating, message} = req.body;
 
-        if (!rating || rating < 1 || rating > 5) {
-            return res.status(http.BAD_REQUEST).json({message: "Invalid rating"});
+        // Validate input
+        if (!rating && !message) {
+            return res.status(400).json({error: "Rating or message required"});
         }
 
         const session = await db.ChatSession.findOne({where: {chat_id}});
-        if (!session) return res.status(http.NOT_FOUND).json({message: "Chat not found"});
 
+        if (!session) {
+            return res.status(404).json({error: "Chat session not found"});
+        }
+
+        // Update the session with rating data
         await session.update({
-            agent_rating: rating,
+            agent_rating: rating || null,
             rating_message: message || null
         });
 
-        return res.status(http.OK).json({message: "Thank you for your feedback!"});
-    } catch (e) {
-        console.error("rateAgent", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(200).json({success: true, message: "Rating submitted"});
+    } catch (error) {
+        console.error("Error submitting rating:", error);
+        return res.status(500).json({error: "Internal Server Error"});
     }
 };
