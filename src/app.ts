@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import http from "http";
+// import http from "http";
 import userRoutes from "./routes/user.routes";
 import complaintRoutes from "./routes/complaint.routes";
 import customerRoutes from "./routes/customer.routes";
@@ -17,10 +17,12 @@ import fastTrackRoutes from "./routes/fastTrack.routes";
 import serviceParkRoutes from "./routes/servicePark.routes";
 import unavailableRoutes from "./routes/unavailable.routes";
 import chatRoutes from "./routes/chat.routes";
-import initSocket from "./realtime/socket";
-import {Server} from "socket.io";
+// import initSocket from "./realtime/socket";
+// import {Server} from "socket.io";
 // import path from "node:path";
 // import indexRouter from './routes/index';
+
+import {handleFacebookMessage} from "./realtime/facebook";
 
 const app = express();
 
@@ -33,14 +35,50 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({extended: true}));
 
-const httpServer = http.createServer(app);
-const io = new Server(httpServer, {
-    cors: { origin: "*" },
-});
-initSocket(io);
+// const httpServer = http.createServer(app);
+// const io = new Server(httpServer, {
+//     cors: { origin: "*" },
+// });
+// initSocket(io);
 
 app.get("/", (req, res) => {
     res.json({message: "Hello World!"});
+});
+
+const VERIFY_TOKEN = process.env.FACEBOOK_VERIFY_TOKEN;
+
+app.get("/webhook", (req, res) => {
+    let mode = req.query["hub.mode"];
+    let token = req.query["hub.verify_token"];
+    let challenge = req.query["hub.challenge"];
+
+    if (mode && token) {
+        if (mode === "subscribe" && token === VERIFY_TOKEN) {
+            console.log("WEBHOOK_VERIFIED");
+            res.status(200).send(challenge);
+        } else {
+            res.sendStatus(403);
+        }
+    }
+});
+
+app.post("/webhook", (req, res) => {
+    let body = req.body;
+
+    if (body.object === "page") {
+        body.entry.forEach(function (entry: { messaging: any[]; }) {
+            let webhook_event = entry.messaging[0];
+            let sender_psid = webhook_event.sender.id;
+
+            if (webhook_event.message && webhook_event.message.text) {
+                handleFacebookMessage(sender_psid, webhook_event.message);
+            }
+        });
+
+        res.status(200).send("EVENT_RECEIVED");
+    } else {
+        res.sendStatus(404);
+    }
 });
 
 
