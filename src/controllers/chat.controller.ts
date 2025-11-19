@@ -9,13 +9,14 @@ function newChatId() {
 
 export const startChat = async (req: Request, res: Response) => {
     try {
-        const {language, channel} = req.body;
+        const {language = 'en', channel} = req.body;
         const chat_id = newChatId();
 
         const session = await db.ChatSession.create({
             chat_id,
             status: "bot",
             channel: channel || "Web",
+            language: language,
             last_message_at: new Date(),
             unread_count: 0,
         });

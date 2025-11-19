@@ -50,6 +50,7 @@ export interface ChatSessionAttr {
     agent_id: number | null; // FK -> users.id
     priority: number;        // higher = more urgent
     channel?: "Web" | "WhatsApp" | "Facebook" | "Other" | null;
+    language: "en" | "si" | "ta";
     last_message_at?: Date | null;
     unread_count?: number;
     agent_rating?: number;
@@ -58,7 +59,7 @@ export interface ChatSessionAttr {
     updatedAt?: Date;
 }
 
-interface ChatSessionCreate extends Optional<ChatSessionAttr, "id" | "status" | "agent_id" | "priority" | "channel" | "last_message_at" | "unread_count" | "agent_rating" | "rating_message"> {
+interface ChatSessionCreate extends Optional<ChatSessionAttr, "id" | "status" | "agent_id" | "priority" | "channel" | "language" | "last_message_at" | "unread_count" | "agent_rating" | "rating_message"> {
 }
 
 export class ChatSession extends Model<ChatSessionAttr, ChatSessionCreate> implements ChatSessionAttr {
@@ -68,6 +69,7 @@ export class ChatSession extends Model<ChatSessionAttr, ChatSessionCreate> imple
     public agent_id!: number | null;
     public priority!: number;
     public channel?: ChatSessionAttr["channel"];
+    public language!: ChatSessionAttr["language"];
     public last_message_at?: Date | null;
     public unread_count?: number;
     public agent_rating?: number;
@@ -92,13 +94,14 @@ export default (sequelize: Sequelize) => {
                 references: {model: "users", key: "id"},
             },
             priority: {type: DataTypes.INTEGER, allowNull: false, defaultValue: 0},
+            language: {type: DataTypes.ENUM("en", "si", "ta"), allowNull: false, defaultValue: "en"},
             channel: {type: DataTypes.ENUM("Web", "WhatsApp", "Facebook", "Other")},
             last_message_at: {type: DataTypes.DATE, allowNull: true},
             unread_count: {type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 0},
             agent_rating: {type: DataTypes.INTEGER, allowNull: true},
             rating_message: {type: DataTypes.TEXT, allowNull: true},
         },
-        {sequelize, tableName: "chat_sessions", timestamps: true}
+        {sequelize, tableName: "chat_sessions", timestamps: true, charset: 'utf8mb4', collate: 'utf8mb4_unicode_ci'}
     );
     return ChatSession;
 };
