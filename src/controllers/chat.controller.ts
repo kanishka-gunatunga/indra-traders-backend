@@ -107,6 +107,11 @@ export const getMessages = async (req: Request, res: Response) => {
         const msgs = await db.ChatMessage.findAll({
             where: {chat_id},
             order: [["createdAt", "ASC"]],
+            include: [{
+                model: db.ChatSession,
+                as: 'session',
+                attributes: ['status', 'language']
+            }]
         });
         return res.status(http.OK).json(msgs);
     } catch (e) {
@@ -180,5 +185,24 @@ export const rateAgent = async (req: Request, res: Response) => {
     } catch (error) {
         console.error("Error submitting rating:", error);
         return res.status(500).json({error: "Internal Server Error"});
+    }
+};
+
+export const uploadAttachment = (req: Request, res: Response) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: "No file uploaded" });
+        }
+
+        const fileUrl = `/uploads/${req.file.filename}`;
+
+        return res.status(200).json({
+            url: fileUrl,
+            filename: req.file.originalname,
+            mimetype: req.file.mimetype
+        });
+    } catch (e) {
+        console.error("Upload Error", e);
+        return res.status(500).json({ message: "Upload failed" });
     }
 };

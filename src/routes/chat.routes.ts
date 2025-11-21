@@ -1,5 +1,6 @@
 import {Router} from "express";
 import * as Chat from "../controllers/chat.controller";
+import {uploadMiddleware} from "../utils/upload";
 
 const r = Router();
 
@@ -25,6 +26,8 @@ r.get("/:chat_id/messages", Chat.getMessages);
 r.get("/assigned/:user_id", Chat.myAssigned);
 
 r.post("/:chat_id/rate", Chat.rateAgent);
+
+r.post("/upload", uploadMiddleware.single("file"), Chat.uploadAttachment);
 
 
 export default r;

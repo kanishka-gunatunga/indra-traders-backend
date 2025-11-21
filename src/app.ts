@@ -23,6 +23,7 @@ import chatRoutes from "./routes/chat.routes";
 // import indexRouter from './routes/index';
 
 import {handleFacebookMessage} from "./realtime/facebook";
+import path from "path";
 
 const app = express();
 
@@ -34,6 +35,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({extended: true}));
+
+app.use("/api/v1/uploads", express.static(path.join(process.cwd(), "public/uploads")));
 
 // const httpServer = http.createServer(app);
 // const io = new Server(httpServer, {

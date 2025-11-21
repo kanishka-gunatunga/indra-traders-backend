@@ -81,12 +81,15 @@ export interface ChatMsgAttr {
     chat_id: string;
     sender: "customer" | "bot" | "agent";
     message: string;
+    attachment_url?: string | null;
+    attachment_type?: "image" | "document" | "none";
+    file_name?: string | null;
     viewed_by_agent: "yes" | "no";
     createdAt?: Date;
     updatedAt?: Date;
 }
 
-export interface ChatMsgCreateAttr extends Optional<ChatMsgAttr, "id" | "createdAt" | "updatedAt"> {
+export interface ChatMsgCreateAttr extends Optional<ChatMsgAttr, "id" | "createdAt" | "updatedAt" | "attachment_url" | "attachment_type" | "file_name"> {
 }
 
 export class ChatMessage extends Model<ChatMsgAttr, ChatMsgCreateAttr> implements ChatMsgAttr {
@@ -94,6 +97,9 @@ export class ChatMessage extends Model<ChatMsgAttr, ChatMsgCreateAttr> implement
     public chat_id!: string;
     public sender!: "customer" | "bot" | "agent";
     public message!: string;
+    public attachment_url?: string | null;
+    public attachment_type?: "image" | "document" | "none";
+    public file_name?: string | null;
     public viewed_by_agent!: "yes" | "no";
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
@@ -105,7 +111,10 @@ export default (sequelize: Sequelize) => {
             id: {type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true},
             chat_id: {type: DataTypes.STRING, allowNull: false},
             sender: {type: DataTypes.ENUM("customer", "bot", "agent"), allowNull: false},
-            message: {type: DataTypes.TEXT, allowNull: false},
+            message: {type: DataTypes.TEXT, allowNull: true},
+            attachment_url: {type: DataTypes.STRING, allowNull: true},
+            attachment_type: {type: DataTypes.ENUM("image", "document", "none"), defaultValue: "none"},
+            file_name: {type: DataTypes.STRING, allowNull: true},
             viewed_by_agent: {type: DataTypes.ENUM("yes", "no"), defaultValue: "no"},
         },
         {

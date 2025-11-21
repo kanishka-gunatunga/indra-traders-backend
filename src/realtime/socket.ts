@@ -1440,6 +1440,16 @@ type AgentPresence = {
     socketId: string;
 }
 
+interface MessagePayload {
+    chat_id: string;
+    text: string;
+    attachment?: {
+        url: string;
+        type: "image" | "document";
+        name: string;
+    }
+}
+
 const groq = new Groq({apiKey: process.env.OPENAI_API_KEY}); // Using your Groq key
 const pinecone = new Pinecone({apiKey: process.env.PINECONE_API_KEY!});
 
@@ -1563,7 +1573,7 @@ const vectorTool = new DynamicStructuredTool({
     schema: z.object({
         query: z.string().describe("The search query related to company info"),
     }),
-    func: async ({ query }) => await getGeneralContext(query),
+    func: async ({query}) => await getGeneralContext(query),
 });
 
 const dbTool = new DynamicStructuredTool({
@@ -1572,7 +1582,7 @@ const dbTool = new DynamicStructuredTool({
     schema: z.object({
         question: z.string().describe("The full natural language question regarding inventory"),
     }),
-    func: async ({ question }) => await queryDatabase(question),
+    func: async ({question}) => await queryDatabase(question),
 });
 
 const tools = [vectorTool, dbTool];
@@ -1604,7 +1614,7 @@ export async function processBotMessage(chat_id: string, englishText: string) {
     try {
         // 1. Fetch Conversation History from DB
         const history = await db.ChatMessage.findAll({
-            where: { chat_id },
+            where: {chat_id},
             order: [["createdAt", "DESC"]],
             limit: 1 // Get last 6 messages for context
         });
@@ -1965,16 +1975,31 @@ export default function initSocket(io: Server) {
             console.log(`Agent ${uid} connected`);
         }
 
-        socket.on("message.customer", async ({chat_id, text}: { chat_id: string, text: string }) => {
+        // socket.on("message.customer", async ({chat_id, text}: { chat_id: string, text: string }) => {
+        socket.on("message.customer", async (payload: MessagePayload) => {
+
+            const {chat_id, text, attachment} = payload;
+
             const session = await db.ChatSession.findOne({where: {chat_id}});
             if (!session) return;
 
+            // const customerMsg = await db.ChatMessage.create({
+            //     chat_id, sender: "customer", message: text, viewed_by_agent: "no"
+            // });
+
             const customerMsg = await db.ChatMessage.create({
-                chat_id, sender: "customer", message: text, viewed_by_agent: "no"
+                chat_id,
+                sender: "customer",
+                message: text || "",
+                viewed_by_agent: "no",
+                attachment_url: attachment?.url || null,
+                attachment_type: attachment?.type || "none",
+                file_name: attachment?.name || null,
             });
+
             io.to(chatRoom(chat_id)).emit("message.new", customerMsg);
 
-            if (session.status === "bot") {
+            if (session.status === "bot" && text) {
                 try {
                     io.to(chatRoom(chat_id)).emit("typing", {by: 'bot'});
 
@@ -2110,8 +2135,15 @@ export default function initSocket(io: Server) {
                     });
                     io.to(chatRoom(chat_id)).emit("message.new", fallbackMsg);
                 } finally {
-                    io.to(chatRoom(chat_id)).emit("stop_typing", { by: 'bot' });
+                    io.to(chatRoom(chat_id)).emit("stop_typing", {by: 'bot'});
                 }
+            } else if (session.status === "bot" && attachment) {
+                const botReply = await db.ChatMessage.create({
+                    chat_id, sender: "bot",
+                    message: "I received your attachment. An agent will review it shortly.",
+                    viewed_by_agent: "no"
+                });
+                io.to(chatRoom(chat_id)).emit("message.new", botReply);
             } else {
                 await session.update({
                     last_message_at: new Date(),
@@ -2122,19 +2154,30 @@ export default function initSocket(io: Server) {
 
         // ... (Rest of your socket handlers: typing, stop_typing, message.agent, etc.) ...
         socket.on("typing", ({chat_id, by}: { chat_id: string; by: "customer" | "agent" }) => {
-            socket.to(chatRoom(chat_id)).emit("typing", {by});
+            socket.to(chatRoom(chat_id)).emit("typing", {by, chat_id});
         });
 
         socket.on("stop_typing", ({chat_id, by}: { chat_id: string; by: "customer" | "agent" }) => {
-            socket.to(chatRoom(chat_id)).emit("stop_typing", {by});
+            socket.to(chatRoom(chat_id)).emit("stop_typing", {by, chat_id});
         });
 
-        socket.on("message.agent", async ({chat_id, text, user_id}: {
-            chat_id: string;
-            text: string;
-            user_id: number
-        }) => {
-            const msg = await db.ChatMessage.create({chat_id, sender: "agent", message: text, viewed_by_agent: "yes"});
+        // socket.on("message.agent", async ({chat_id, text, user_id}: {
+        //     chat_id: string;
+        //     text: string;
+        //     user_id: number
+        // }) => {
+        socket.on("message.agent", async (payload: {chat_id: string; text: string; user_id: number; attachment?: any}) => {
+            const { chat_id, text, attachment } = payload;
+
+            const msg = await db.ChatMessage.create({
+                chat_id,
+                sender: "agent",
+                message: text || "",
+                viewed_by_agent: "yes",
+                attachment_url: attachment?.url || null,
+                attachment_type: attachment?.type || "none",
+                file_name: attachment?.name || null,
+            });
             await db.ChatSession.update(
                 {last_message_at: new Date(), unread_count: 0},
                 {where: {chat_id}}
