@@ -79,7 +79,8 @@ import {DataTypes, Model, Optional, Sequelize} from "sequelize";
 export interface ChatMsgAttr {
     id: number;
     chat_id: string;
-    sender: "customer" | "bot" | "agent";
+    // sender: "customer" | "bot" | "agent";
+    sender: "customer" | "bot" | "agent" | "system";
     message: string;
     attachment_url?: string | null;
     attachment_type?: "image" | "document" | "none";
@@ -95,7 +96,7 @@ export interface ChatMsgCreateAttr extends Optional<ChatMsgAttr, "id" | "created
 export class ChatMessage extends Model<ChatMsgAttr, ChatMsgCreateAttr> implements ChatMsgAttr {
     public id!: number;
     public chat_id!: string;
-    public sender!: "customer" | "bot" | "agent";
+    public sender!: "customer" | "bot" | "agent" | "system";
     public message!: string;
     public attachment_url?: string | null;
     public attachment_type?: "image" | "document" | "none";
@@ -110,7 +111,7 @@ export default (sequelize: Sequelize) => {
         {
             id: {type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true},
             chat_id: {type: DataTypes.STRING, allowNull: false},
-            sender: {type: DataTypes.ENUM("customer", "bot", "agent"), allowNull: false},
+            sender: {type: DataTypes.ENUM("customer", "bot", "agent", "system"), allowNull: false},
             message: {type: DataTypes.TEXT, allowNull: true},
             attachment_url: {type: DataTypes.STRING, allowNull: true},
             attachment_type: {type: DataTypes.ENUM("image", "document", "none"), defaultValue: "none"},

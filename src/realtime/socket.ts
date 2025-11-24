@@ -1434,10 +1434,12 @@ import {z} from "zod";
 import {ChatPromptTemplate, MessagesPlaceholder} from "@langchain/core/prompts";
 import {createAgent} from "langchain";
 import {HumanMessage, AIMessage, BaseMessage, SystemMessage} from "@langchain/core/messages";
+import {ChatSession} from "../models/chatSession.model";
 
 type AgentPresence = {
     userId: number;
     socketId: string;
+    languages: string[];
 }
 
 interface MessagePayload {
@@ -1567,57 +1569,101 @@ const queryDatabase = async (userQuestion: string) => {
 };
 
 
+// const vectorTool = new DynamicStructuredTool({
+//     name: "get_general_company_info",
+//     description: "Use this for questions about Indra Traders, branch locations, opening hours, contact details, or services.",
+//     schema: z.object({
+//         query: z.string().describe("The search query related to company info"),
+//     }),
+//     func: async ({query}) => await getGeneralContext(query),
+// });
+//
+// const dbTool = new DynamicStructuredTool({
+//     name: "check_vehicle_inventory",
+//     description: "Use this for questions about specific cars, vehicle prices, stock availability, or spare parts.",
+//     schema: z.object({
+//         question: z.string().describe("The full natural language question regarding inventory"),
+//     }),
+//     func: async ({question}) => await queryDatabase(question),
+// });
+
 const vectorTool = new DynamicStructuredTool({
     name: "get_general_company_info",
     description: "Use this for questions about Indra Traders, branch locations, opening hours, contact details, or services.",
-    schema: z.object({
-        query: z.string().describe("The search query related to company info"),
-    }),
+    schema: z.object({query: z.string()}),
     func: async ({query}) => await getGeneralContext(query),
 });
 
 const dbTool = new DynamicStructuredTool({
     name: "check_vehicle_inventory",
-    description: "Use this for questions about specific cars, vehicle prices, stock availability, or spare parts.",
-    schema: z.object({
-        question: z.string().describe("The full natural language question regarding inventory"),
-    }),
+    description: "Use this for questions about specific cars, prices, stock, or spare parts. ONLY available for registered users.",
+    schema: z.object({question: z.string()}),
     func: async ({question}) => await queryDatabase(question),
 });
 
-const tools = [vectorTool, dbTool];
+const handoffTool = new DynamicStructuredTool({
+    name: "transfer_to_live_agent",
+    description: "Call this tool ONLY when the user explicitly agrees (says 'yes', 'ok', 'please') to speak with a live agent.",
+    schema: z.object({reason: z.string().describe("Reason for transfer")}),
+    func: async ({reason}) => {
+        return "__HANDOFF_TRIGGERED__";
+    },
+})
+
+// const tools = [vectorTool, dbTool];
 
 
 const llm = new ChatGroq({
     apiKey: process.env.OPENAI_API_KEY, // Ensure this env var is set
     // model: "llama-3.1-8b-instant",
     model: "llama-3.3-70b-versatile",
-    temperature: 0.2,
+    temperature: 0.1,
 });
 
-const agent = createAgent({
-    model: llm,
-    tools: tools,
-    systemPrompt: `You are 'Indra Assistant', a friendly support agent for Indra Traders.
+// const agent = createAgent({
+//     model: llm,
+//     tools: tools,
+//     systemPrompt: `You are 'Indra Assistant', a friendly support agent for Indra Traders.
+//
+//     CORE RULES:
+//     1. Use 'check_vehicle_inventory' for ANY question about cars, parts, prices, or stock.
+//     2. Use 'get_general_company_info' for questions about location, hours, or services.
+//     3. If the tool returns JSON data, convert it into a friendly, easy-to-read bulleted list.
+//     4. If the tool returns "No records found", politely inform the user.
+//     5. Keep responses concise and helpful.
+//     `,
+// });
 
-    CORE RULES:
-    1. Use 'check_vehicle_inventory' for ANY question about cars, parts, prices, or stock.
-    2. Use 'get_general_company_info' for questions about location, hours, or services.
-    3. If the tool returns JSON data, convert it into a friendly, easy-to-read bulleted list.
-    4. If the tool returns "No records found", politely inform the user.
-    5. Keep responses concise and helpful.
-    `,
-});
 
-
-export async function processBotMessage(chat_id: string, englishText: string) {
+export async function processBotMessage(chat_id: string, englishText: string): Promise<{
+    type: 'text' | 'handoff',
+    content: string
+}> {
     try {
+
+        const session = await db.ChatSession.findOne({where: {chat_id}}) as ChatSession;
+        if (!session) return {type: 'text', content: "Session expired"};
+
         // 1. Fetch Conversation History from DB
         const history = await db.ChatMessage.findAll({
             where: {chat_id},
             order: [["createdAt", "DESC"]],
             limit: 1 // Get last 6 messages for context
         });
+
+        let activeTools: any[] = [vectorTool, handoffTool];
+
+        if (session.user_type === 'registered') {
+            activeTools.push(dbTool);
+        }
+
+        const llmWithTools = llm.bindTools(activeTools);
+
+        // const agent = createAgent({
+        //     model: llm,
+        //     tools: activeTools,
+        // })
+
 
         // 2. Convert DB messages to LangChain format
         // Note: We reverse the history so it's chronological (Oldest -> Newest)
@@ -1629,23 +1675,93 @@ export async function processBotMessage(chat_id: string, englishText: string) {
             }
         });
 
-        // 3. Add the user's NEW message to the end of the list
+        const systemPrompt = new SystemMessage(`
+        You are 'Indra Assistant', a support agent for Indra Traders.
+        User Name: ${session.customer_name || 'Guest'}
+        User Type: ${session.user_type}
+        
+        CORE INSTRUCTIONS:
+        1. Answer questions using the available tools.
+        2. If 'check_vehicle_inventory' is NOT available (Guest user) and they ask about stock/prices, politely say: "Inventory details are for registered users only. Please register to view stock."
+        
+        HANDOFF PROTOCOL (CRITICAL):
+        1. If you cannot answer a question using your tools, or if the user is frustrated, YOU MUST SAY:
+           "I'm sorry, I don't have that information. Would you like me to connect you with a Live Agent for immediate assistance?"
+        2. If the user replies "Yes", "Sure", or "OK" to that offer, call the 'transfer_to_live_agent' tool immediately.
+        3. Do not call the transfer tool unless the user agrees.
+        `)
+
+        messageHistory.unshift(systemPrompt);
         messageHistory.push(new HumanMessage(englishText));
+
+        const aiMessage = await llmWithTools.invoke(messageHistory);
+
+        if (aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
+            const toolCall = aiMessage.tool_calls[0];
+
+            if (toolCall.name === 'transfer_to_live_agent') {
+                return {type: 'handoff', content: "Connecting you to a live agent now..."};
+            }
+
+            let toolOutput = "";
+            if (toolCall.name === 'get_general_company_info') {
+                toolOutput = await getGeneralContext(toolCall.args.query);
+            } else if (toolCall.name === 'check_vehicle_inventory') {
+                // Double check permission
+                if (session.user_type !== 'registered') {
+                    toolOutput = "Access Denied: Guest users cannot check inventory.";
+                } else {
+                    toolOutput = await queryDatabase(toolCall.args.question);
+                }
+            }
+
+            const summaryPrompt = new SystemMessage(`
+                You called tool '${toolCall.name}'. 
+                Result: ${toolOutput}
+                
+                Task: Summarize this result for the user in a friendly way. Use Markdown.
+            `);
+            const summaryRes = await llm.invoke([summaryPrompt]);
+            return {type: 'text', content: summaryRes.content as string};
+        }
+
+        return {type: 'text', content: aiMessage.content as string};
+
+
+        // const result = await agent.invoke({messages: messageHistory});
+        //
+        // const responseText = result.messages[result.messages.length - 1].content as string;
+        //
+        // const lastMsg = result.messages[result.messages.length - 1];
+        // const toolCalls = lastMsg.tool_calls;
+        //
+        // if (toolCalls && toolCalls.length > 0) {
+        //     if (toolCalls.some((tc:any) => tc.name === 'transfer_to_live_agent')){
+        //         return { type: 'handoff', content: "Connecting you to a live agent now..." };
+        //     }
+        // }
+        //
+        // return {type: 'text', content: responseText};
+
+
+        // 3. Add the user's NEW message to the end of the list
+        // messageHistory.push(new HumanMessage(englishText));
 
         // 4. Invoke the Agent
         // The 'createAgent' return type expects an object with a 'messages' array
-        const result = await agent.invoke({
-            messages: messageHistory
-        });
+        // const result = await agent.invoke({
+        //     messages: messageHistory
+        // });
 
         // 5. Extract the Final Answer
         // The result contains the full state; we want the content of the last message (the bot's answer)
-        const lastMessage = result.messages[result.messages.length - 1];
-        return lastMessage.content as string;
+        // const lastMessage = result.messages[result.messages.length - 1];
+        // return lastMessage.content as string;
 
     } catch (error) {
         console.error("Bot Processing Error:", error);
-        return "I'm currently experiencing high traffic and couldn't process your request. Please try again or ask for a live agent.";
+        // return "I'm currently experiencing high traffic and couldn't process your request. Please try again or ask for a live agent.";
+        return {type: 'text', content: "I'm having trouble. Please try again."};
     }
 }
 
@@ -1840,13 +1956,15 @@ export async function processBotMessage(chat_id: string, englishText: string) {
 const onlineAgents = new Map<number, AgentPresence>();
 const chatRoom = (chatId: string) => `chat:${chatId}`;
 
+const getLangRoom = (lang: string) => `agents:lang:${lang}`;
+
 // ... (markUserOnline, markUserOffline functions) ...
-const markUserOnline = async (userId: number, socketId: string) => {
-    onlineAgents.set(userId, {userId, socketId});
-}
-const markUserOffline = async (userId: number) => {
-    onlineAgents.delete(userId);
-}
+// const markUserOnline = async (userId: number, socketId: string) => {
+//     onlineAgents.set(userId, {userId, socketId});
+// }
+// const markUserOffline = async (userId: number) => {
+//     onlineAgents.delete(userId);
+// }
 
 
 // export async function processBotMessage(chat_id: string, englishText: string) {
@@ -1969,10 +2087,30 @@ export default function initSocket(io: Server) {
 
         if (role === "agent" && user_id) {
             const uid = Number(user_id);
-            markUserOnline(uid, socket.id);
-            socket.join(`agent:${uid}`);
-            io.to(socket.id).emit("agent.online", {user_id: uid});
-            console.log(`Agent ${uid} connected`);
+
+            db.User.findByPk(uid).then((user: any) => {
+                if (user) {
+                    const languages = user.languages || ["en"];
+
+                    onlineAgents.set(uid, {userId: uid, socketId: socket.id, languages});
+                    socket.join(`agent:${uid}`);
+
+                    languages.forEach((lang: string) => {
+                        socket.join(getLangRoom(lang));
+                        console.log(`Agent ${uid} joined queue for language: ${lang}`);
+                    });
+
+                    io.to(socket.id).emit("agent.online", {user_id: uid});
+                    console.log(`Agent ${uid} connected with languages: ${languages.join(", ")}`);
+                }
+            }).catch((err: any) => console.error("Error fetching agent details", err));
+
+
+            // markUserOnline(uid, socket.id);
+
+            // socket.join(`agent:${uid}`);
+            // io.to(socket.id).emit("agent.online", {user_id: uid});
+            // console.log(`Agent ${uid} connected`);
         }
 
         // socket.on("message.customer", async ({chat_id, text}: { chat_id: string, text: string }) => {
@@ -1980,7 +2118,7 @@ export default function initSocket(io: Server) {
 
             const {chat_id, text, attachment} = payload;
 
-            const session = await db.ChatSession.findOne({where: {chat_id}});
+            const session = await db.ChatSession.findOne({where: {chat_id}}) as ChatSession;
             if (!session) return;
 
             // const customerMsg = await db.ChatMessage.create({
@@ -2103,11 +2241,32 @@ export default function initSocket(io: Server) {
                         inputForAi = await TranslateService.translateText(text, 'en');
                     }
 
-                    const englishResponse = await processBotMessage(chat_id, inputForAi);
+                    const botResult = await processBotMessage(chat_id, inputForAi);
 
-                    let finalUserResponse = englishResponse;
+                    if (typeof botResult === 'object' && botResult.type === 'handoff') {
+                        await session.update({status: 'queued', priority: 1});
+
+                        io.emit("queue.updated");
+
+                        let finalResponse = botResult.content;
+                        if (session.language !== 'en') {
+                            finalResponse = await TranslateService.translateText(finalResponse, session.language);
+                        }
+
+                        const sysMsg = await db.ChatMessage.create({
+                            chat_id, sender: "system", message: finalResponse, viewed_by_agent: "no"
+                        });
+
+                        io.to(chatRoom(chat_id)).emit("message.new", sysMsg);
+                        io.to(chatRoom(chat_id)).emit("stop_typing", {by: 'bot'});
+                        return;
+                    }
+
+                    // const englishResponse = (botResult as any).content || botResult;
+
+                    let finalUserResponse = botResult.content;
                     if (session.language !== 'en') {
-                        finalUserResponse = await TranslateService.translateText(englishResponse, session.language);
+                        finalUserResponse = await TranslateService.translateText(finalUserResponse, session.language);
                     }
 
                     // const finalBotResponse = await processBotMessage(chat_id, text);
@@ -2166,8 +2325,13 @@ export default function initSocket(io: Server) {
         //     text: string;
         //     user_id: number
         // }) => {
-        socket.on("message.agent", async (payload: {chat_id: string; text: string; user_id: number; attachment?: any}) => {
-            const { chat_id, text, attachment } = payload;
+        socket.on("message.agent", async (payload: {
+            chat_id: string;
+            text: string;
+            user_id: number;
+            attachment?: any
+        }) => {
+            const {chat_id, text, attachment} = payload;
 
             const msg = await db.ChatMessage.create({
                 chat_id,
@@ -2185,13 +2349,37 @@ export default function initSocket(io: Server) {
             io.to(chatRoom(chat_id)).emit("message.new", msg);
         });
 
+        // socket.on("request.agent", async ({chat_id, priority = 0, channel}: any) => {
+        //     const session = await db.ChatSession.findOne({where: {chat_id}});
+        //     if (!session) return;
+        //
+        //     await session.update({status: "queued", priority, channel: channel || session.channel});
+        //     io.emit("queue.updated");
+        // });
+
+        // -------------------------
         socket.on("request.agent", async ({chat_id, priority = 0, channel}: any) => {
             const session = await db.ChatSession.findOne({where: {chat_id}});
             if (!session) return;
 
+            // Determine the target language from the session
+            const requiredLanguage = session.language || 'en';
+
             await session.update({status: "queued", priority, channel: channel || session.channel});
-            io.emit("queue.updated");
+
+            // BROADCAST STRATEGY:
+            // Only emit "queue.updated" to agents who speak the required language.
+            // This prevents agents who don't know Tamil from seeing Tamil chats in their queue (if your frontend filters based on this event)
+
+            console.log(`Chat ${chat_id} queuing for language: ${requiredLanguage}`);
+
+            // Emit to the specific language room
+            io.to(getLangRoom(requiredLanguage)).emit("queue.updated");
+
+            // Optional: Also emit to 'agents:lang:en' as a fallback if it's a critical issue?
+            // For now, we stick to strict routing.
         });
+        // ------------------------------------------------------
 
         socket.on("agent.accept", async ({chat_id, user_id}: { chat_id: string; user_id: number }) => {
             const session = await db.ChatSession.findOne({where: {chat_id}});
@@ -2230,7 +2418,9 @@ export default function initSocket(io: Server) {
 
         socket.on("disconnect", () => {
             if (role === "agent" && user_id) {
-                markUserOffline(Number(user_id));
+                // markUserOffline(Number(user_id));
+                const uid = Number(user_id);
+                onlineAgents.delete(uid);
                 console.log(`Agent ${user_id} disconnected`);
             }
         });

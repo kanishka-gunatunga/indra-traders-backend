@@ -12,9 +12,10 @@ interface UserAttributes {
     department: "ITPL" | "ISP" | "IMS" | "IFT";
     branch: "BAMBALAPITIYA" | "KANDY" | "JAFFNA" | "GALLE" | "NEGOMBO";
     password: string;
+    languages: string[];
 }
 
-interface UserCreationAttributes extends Optional<UserAttributes, "id"> {
+interface UserCreationAttributes extends Optional<UserAttributes, "id" | "languages"> {
 }
 
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
@@ -26,6 +27,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
     public department!: "ITPL" | "ISP" | "IMS" | "IFT";
     public branch!: "BAMBALAPITIYA" | "KANDY" | "JAFFNA" | "GALLE" | "NEGOMBO";
     public password!: string;
+    public languages!: string[];
 }
 
 export default (sequelize: Sequelize) => {
@@ -65,6 +67,12 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.STRING(255),
                 allowNull: false,
             },
+            languages: {
+                type: DataTypes.JSON,
+                allowNull: false,
+                defaultValue: ["en"],
+                comment: "Stores array of language codes: ['en', 'si', 'ta']"
+            }
         },
         {
             sequelize,

@@ -33,7 +33,7 @@ export const generateToken = (user: JwtUserPayload) => {
 
 export const createUser = async (req: Request, res: Response) => {
     try {
-        const {full_name, contact_no, email, user_role, department, branch, password, confirm_password} = req.body;
+        const {full_name, contact_no, email, user_role, department, branch, password, confirm_password, languages} = req.body;
 
         if (password !== confirm_password) {
             return res.status(http.BAD_REQUEST).json({message: "Passwords do not match"});
@@ -46,6 +46,8 @@ export const createUser = async (req: Request, res: Response) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        const userLanguages = Array.isArray(languages) && languages.length > 0 ? languages : ["en"];
+
         const user = await User.create({
             full_name,
             contact_no,
@@ -54,6 +56,7 @@ export const createUser = async (req: Request, res: Response) => {
             department,
             branch,
             password: hashedPassword,
+            languages: userLanguages,
         });
 
         res.status(http.CREATED).json({message: "User created successfully", user});

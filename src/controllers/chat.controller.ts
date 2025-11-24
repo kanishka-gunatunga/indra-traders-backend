@@ -9,7 +9,13 @@ function newChatId() {
 
 export const startChat = async (req: Request, res: Response) => {
     try {
-        const {language = 'en', channel} = req.body;
+        const {
+            language = 'en',
+            channel,
+            user_type = 'guest',
+            name,
+            mobile
+        } = req.body;
         const chat_id = newChatId();
 
         const session = await db.ChatSession.create({
@@ -17,6 +23,9 @@ export const startChat = async (req: Request, res: Response) => {
             status: "bot",
             channel: channel || "Web",
             language: language,
+            user_type: user_type,
+            customer_name: name || null,
+            customer_contact: mobile || null,
             last_message_at: new Date(),
             unread_count: 0,
         });
@@ -62,6 +71,41 @@ export const listQueue = async (req: Request, res: Response) => {
         return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
     }
 };
+
+// export const listQueue = async (req: Request, res: Response) => {
+//     try {
+//         // We assume the frontend sends the current user's ID in query or we get it from auth middleware
+//         // For this example, let's assume you pass ?agent_id=123 or handle it via middleware
+//         const {agent_id} = req.query;
+//
+//         let languageFilter = {};
+//
+//         if (agent_id) {
+//             const agent = await db.User.findByPk(agent_id);
+//             if (agent && agent.languages) {
+//                 // Filter queue to only show chats matching agent's languages
+//                 languageFilter = {
+//                     language: {[Op.in]: agent.languages}
+//                 };
+//             }
+//         }
+//
+//         const rows = await db.ChatSession.findAll({
+//             where: {
+//                 status: "queued",
+//                 ...languageFilter // Apply filter
+//             },
+//             order: [
+//                 ["priority", "DESC"],
+//                 ["createdAt", "ASC"],
+//             ],
+//         });
+//         return res.status(http.OK).json(rows);
+//     } catch (e) {
+//         console.error("listQueue", e);
+//         return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+//     }
+// };
 
 /** Agent claims a chat manually (alternative to socket 'agent.accept') */
 export const assignChat = async (req: Request, res: Response) => {
@@ -191,7 +235,7 @@ export const rateAgent = async (req: Request, res: Response) => {
 export const uploadAttachment = (req: Request, res: Response) => {
     try {
         if (!req.file) {
-            return res.status(400).json({ message: "No file uploaded" });
+            return res.status(400).json({message: "No file uploaded"});
         }
 
         const fileUrl = `/uploads/${req.file.filename}`;
@@ -203,6 +247,6 @@ export const uploadAttachment = (req: Request, res: Response) => {
         });
     } catch (e) {
         console.error("Upload Error", e);
-        return res.status(500).json({ message: "Upload failed" });
+        return res.status(500).json({message: "Upload failed"});
     }
 };
