@@ -29,5 +29,10 @@ r.post("/:chat_id/rate", Chat.rateAgent);
 
 r.post("/upload", uploadMiddleware.single("file"), Chat.uploadAttachment);
 
+r.get("/ratings", Chat.getSessionHistory);
+
+r.post("/verify-customer", Chat.verifyCustomer);
+r.post("/verify-otp", Chat.validateOtp);
+
 
 export default r;

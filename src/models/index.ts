@@ -33,6 +33,7 @@ import UnavailableSparePartModel from "./unavailableSparePart.model";
 import UnavailableVehicleSaleModel from "./unavailableVehicleSale.model";
 import ChatSessionModel from "./chatSession.model";
 import ChatMessageModel from "./chatMessage.model";
+import OtpModel from "./otp.model"
 
 const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
     host: dbConfig.HOST,
@@ -80,6 +81,7 @@ const UnavailableSparePart = UnavailableSparePartModel(sequelize);
 const UnavailableVehicleSale = UnavailableVehicleSaleModel(sequelize);
 const ChatSession = ChatSessionModel(sequelize);
 const ChatMessage = ChatMessageModel(sequelize);
+const Otp = OtpModel(sequelize);
 
 interface DB {
     Sequelize: typeof Sequelize;
@@ -116,6 +118,7 @@ interface DB {
     UnavailableVehicleSale: typeof UnavailableVehicleSale;
     ChatMessage: typeof ChatMessage;
     ChatSession: typeof ChatSession;
+    Otp: typeof Otp;
 }
 
 
@@ -170,6 +173,9 @@ db.UnavailableService = UnavailableService;
 // chat
 db.ChatMessage = ChatMessage;
 db.ChatSession = ChatSession;
+
+db.Otp = Otp;
+
 
 db.Customer.hasMany(db.Complaint, {foreignKey: "customerId", as: "complaints"});
 db.Complaint.belongsTo(db.Customer, {foreignKey: "customerId", as: "customer"});
@@ -371,8 +377,8 @@ db.UnavailableSparePart.belongsTo(db.User, {foreignKey: "call_agent_id", as: "ca
 // db.ChatSession.hasMany(db.ChatMessage, {foreignKey: "chat_id", sourceKey: "chat_id", as: "messages"});
 // db.ChatMessage.belongsTo(db.ChatSession, {foreignKey: "chat_id", targetKey: "chat_id", as: "session"});
 
-db.ChatSession.belongsTo(db.User, { foreignKey: "agent_id", as: "agent" });
-db.User.hasMany(db.ChatSession, { foreignKey: "agent_id", as: "assignedChats" });
+db.ChatSession.belongsTo(db.User, {foreignKey: "agent_id", as: "agent"});
+db.User.hasMany(db.ChatSession, {foreignKey: "agent_id", as: "assignedChats"});
 
 db.ChatSession.hasMany(db.ChatMessage, {
     foreignKey: "chat_id",
