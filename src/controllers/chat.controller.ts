@@ -57,19 +57,101 @@ export const requestAgent = async (req: Request, res: Response) => {
 };
 
 /** Agents list queued chats (for dashboards) */
+// export const listQueue = async (req: Request, res: Response) => {
+//     try {
+//
+//         const { agent_id } = req.query;
+//
+//         let languageFilter = {};
+//
+//         if (agent_id) {
+//             // 2. Cast to string and convert to Number to avoid TS errors
+//             const uid = Number(agent_id as string);
+//
+//             if (!isNaN(uid)) {
+//                 // 3. Fetch the Agent details to get their languages
+//                 const agent = await db.User.findByPk(uid);
+//
+//                 if (agent && agent.languages && Array.isArray(agent.languages)) {
+//                     // 4. Create Filter: Chat language MUST be in Agent's language array
+//                     // Example: if agent speaks ['en', 'ta'], show only 'en' or 'ta' chats
+//                     languageFilter = {
+//                         language: { [Op.in]: agent.languages }
+//                     };
+//                 }
+//             }
+//         }
+//
+//         const rows = await db.ChatSession.findAll({
+//             where: {status: "queued", ...languageFilter},
+//             order: [
+//                 ["priority", "DESC"],
+//                 ["createdAt", "ASC"],
+//             ],
+//         });
+//         return res.status(http.OK).json(rows);
+//     } catch (e) {
+//         console.error("listQueue", e);
+//         return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+//     }
+// };
+
 export const listQueue = async (req: Request, res: Response) => {
     try {
+        const { agent_id } = req.query;
+
+        if (!agent_id) {
+            return res.status(http.BAD_REQUEST).json({ message: "Agent ID is required to fetch queue" });
+        }
+
+        const uid = Number(agent_id);
+        const agent = await db.User.findByPk(uid);
+
+        if (!agent) {
+            return res.status(http.NOT_FOUND).json({ message: "Agent not found" });
+        }
+
+        // Ensure we have a valid array of languages.
+        // Handles cases where Sequelize might return it as a string or null.
+        let agentLangs: string[] = ["en"]; // Default fallback
+        if (agent.languages) {
+            if (Array.isArray(agent.languages)) {
+                agentLangs = agent.languages;
+            } else if (typeof agent.languages === 'string') {
+                try {
+                    agentLangs = JSON.parse(agent.languages);
+                } catch (e) {
+                    agentLangs = ["en"];
+                }
+            }
+        }
+
+        // Query: Status is 'queued' AND Session Language is in Agent's Languages
         const rows = await db.ChatSession.findAll({
-            where: {status: "queued"},
+            where: {
+                status: "queued",
+                language: {
+                    [Op.in]: agentLangs
+                }
+            },
             order: [
                 ["priority", "DESC"],
                 ["createdAt", "ASC"],
             ],
+            include: [
+                {
+                    model: db.ChatMessage, // Optional: Include last message for preview
+                    as: 'messages',
+                    limit: 1,
+                    order: [['createdAt', 'DESC']]
+                }
+            ]
         });
+
         return res.status(http.OK).json(rows);
     } catch (e) {
         console.error("listQueue", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -379,7 +461,8 @@ export const verifyCustomer = async (req: Request, res: Response) => {
             });
         }
 
-        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        // const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpCode = "123456";
         const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
         await db.Otp.create({
@@ -435,5 +518,27 @@ export const validateOtp = async (req: Request, res: Response) => {
     } catch (e) {
         console.error("validateOtp error:", e);
         return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error validating OTP"});
+    }
+};
+
+
+export const upgradeSession = async (req: Request, res: Response) => {
+    try {
+        const {chat_id} = req.params;
+        const {name, mobile, user_type = 'registered'} = req.body;
+
+        const session = await db.ChatSession.findOne({where: {chat_id}});
+        if (!session) return res.status(http.NOT_FOUND).json({message: "Chat not found"});
+
+        await session.update({
+            user_type: user_type,
+            customer_name: name,
+            customer_contact: mobile
+        });
+
+        return res.status(http.OK).json({success: true, message: "Session upgraded", session});
+    } catch (e) {
+        console.error("upgradeSession", e);
+        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
     }
 };

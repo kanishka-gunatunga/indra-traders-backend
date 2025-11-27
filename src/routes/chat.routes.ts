@@ -34,5 +34,7 @@ r.get("/ratings", Chat.getSessionHistory);
 r.post("/verify-customer", Chat.verifyCustomer);
 r.post("/verify-otp", Chat.validateOtp);
 
+r.post("/chat/:chat_id/upgrade", Chat.upgradeSession);
+
 
 export default r;

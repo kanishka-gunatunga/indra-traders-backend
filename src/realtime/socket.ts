@@ -1588,24 +1588,552 @@
 // }
 
 
-import {Server, Socket} from "socket.io";
+
+//with OpenAi and LangChain Agent
+// import { Server, Socket } from "socket.io";
+// import db from "../models";
+// import { Pinecone } from "@pinecone-database/pinecone";
+// import { FeatureExtractionPipeline, pipeline } from "@xenova/transformers";
+// import { QueryTypes } from "sequelize";
+// import { TranslateService } from "../services/translate";
+//
+//
+// import { ChatOpenAI } from "@langchain/openai";
+// import { DynamicStructuredTool } from "@langchain/core/tools";
+// import { z } from "zod";
+// import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
+// import { createAgent } from "langchain";
+// import { ChatSession } from "../models/chatSession.model";
+//
+//
+// type AgentPresence = {
+//     userId: number;
+//     socketId: string;
+//     languages: string[];
+// }
+//
+// interface MessagePayload {
+//     chat_id: string;
+//     text: string;
+//     attachment?: {
+//         url: string;
+//         type: "image" | "document";
+//         name: string;
+//     }
+// }
+//
+// const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY! });
+//
+// const llm = new ChatOpenAI({
+//     apiKey: process.env.OPENAI_API_KEY,
+//     model: "gpt-4o",
+//     temperature: 0,
+// });
+//
+// let embedder: FeatureExtractionPipeline | null = null;
+// let dbSchemaCache: string | null = null;
+//
+// async function getEmbedder() {
+//     if (!embedder) {
+//         console.log("⚡ Loading Embedding Model (all-MiniLM-L6-v2)...");
+//         embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+//     }
+//     return embedder;
+// }
+//
+// export async function getGeneralContext(query: string): Promise<string> {
+//     try {
+//         const pipeline = await getEmbedder();
+//
+//         const result = await pipeline(query, { pooling: 'mean', normalize: true });
+//         const queryEmbedding = Array.from(result.data as number[]);
+//
+//         const index = pinecone.index(process.env.PINECONE_INDEX!);
+//         const searchRes = await index.query({
+//             vector: queryEmbedding,
+//             topK: 3,
+//             includeMetadata: true
+//         });
+//
+//         if (!searchRes.matches || searchRes.matches.length === 0) {
+//             return "NO_DATA_FOUND";
+//         }
+//
+//         const validMatches = searchRes.matches.filter(match => match.score && match.score > 0.45);
+//
+//         if (validMatches.length === 0) {
+//             return "NO_RELEVANT_DATA_FOUND";
+//         }
+//
+//         return validMatches
+//             .map(match => `[Verified Company Info]: ${match.metadata?.text}`)
+//             .join("\n\n");
+//
+//     } catch (error) {
+//         console.error("Vector Search Error:", error);
+//         return "System Error: Unable to retrieve company information.";
+//     }
+// }
+//
+// async function getDatabaseSchema() {
+//     if (dbSchemaCache) return dbSchemaCache;
+//     try {
+//         const queryInterface = db.sequelize.getQueryInterface();
+//         let schemaString = "";
+//         const tablesToDescribe = ['vehicles', 'spare_parts'];
+//
+//         for (const tableName of tablesToDescribe) {
+//             try {
+//                 const tableSchema = await queryInterface.describeTable(tableName);
+//                 schemaString += `Table: ${tableName}\nColumns:\n`;
+//                 for (const [column, attributes] of Object.entries(tableSchema)) {
+//                     schemaString += `  - ${column} (${(attributes as any).type})\n`;
+//                 }
+//                 schemaString += "\n";
+//             } catch (tableError) {
+//                 console.warn(`Could not describe table ${tableName}. Skipping.`);
+//             }
+//         }
+//         dbSchemaCache = schemaString;
+//         return dbSchemaCache;
+//     } catch (error) {
+//         console.error("Error getting schema:", error);
+//         return "Error: Could not retrieve DB schema.";
+//     }
+// }
+//
+// // const queryDatabase = async (userQuestion: string) => {
+// //     try {
+// //         const schema = await getDatabaseSchema();
+// //         const sqlGenLLM = new ChatOpenAI({
+// //             apiKey: process.env.OPENAI_API_KEY,
+// //             model: "gpt-4o",
+// //             temperature: 0
+// //         });
+// //
+// //         const sqlPrompt = `
+// //         You are a MySQL expert. Write a read-only SELECT query based on this schema:
+// //         ${schema}
+// //
+// //         User Question: ${userQuestion}
+// //
+// //         Rules:
+// //         1. Return ONLY the raw SQL query. No markdown, no explanations.
+// //         2. LIMIT results to 5 unless specified.
+// //         3. Do not use sensitive tables (users, passwords).
+// //         `;
+// //
+// //         const aiMsg = await sqlGenLLM.invoke([new HumanMessage(sqlPrompt)]);
+// //         let sqlQuery = aiMsg.content.toString().replace(/```sql|```/g, "").trim();
+// //
+// //         const forbidden = ['drop', 'delete', 'update', 'insert', 'alter', 'users'];
+// //         if (forbidden.some(word => sqlQuery.toLowerCase().includes(word))) {
+// //             return "SECURITY_ALERT: Query blocked due to forbidden keywords.";
+// //         }
+// //
+// //         console.log("Executing SQL:", sqlQuery);
+// //         const results = await db.sequelize.query(sqlQuery, { type: QueryTypes.SELECT });
+// //
+// //         if (!results || results.length === 0) {
+// //             return "No records found in the database matching that criteria.";
+// //         }
+// //
+// //         return JSON.stringify(results);
+// //     } catch (e) {
+// //         console.error("SQL Tool Error:", e);
+// //         return "Error executing database query.";
+// //     }
+// // };
+//
+// const queryDatabase = async (userQuestion: string) => {
+//     try {
+//         const schema = await getDatabaseSchema();
+//         const sqlGenLLM = new ChatOpenAI({
+//             apiKey: process.env.OPENAI_API_KEY,
+//             model: "gpt-4o",
+//             temperature: 0
+//         });
+//
+//         const sqlPrompt = `
+//         You are a MySQL expert. Write a read-only SELECT query based on this schema:
+//         ${schema}
+//
+//         User Question: ${userQuestion}
+//
+//         Rules:
+//         1. Return ONLY the raw SQL query. Do not use Markdown (no \`\`\`sql tags).
+//         2. LIMIT results to 5 unless specified.
+//         3. Do not use sensitive tables (users, passwords).
+//         `;
+//
+//         const aiMsg = await sqlGenLLM.invoke([new HumanMessage(sqlPrompt)]);
+//
+//         // 1. IMPROVED CLEANING: Remove markdown tags and whitespace
+//         let sqlQuery = aiMsg.content.toString()
+//             .replace(/```sql/g, "")
+//             .replace(/```/g, "")
+//             .trim();
+//
+//         // 2. CRITICAL FIX: Smart Security Check
+//         // We use Regex to match whole words only.
+//         // This allows columns like "updatedAt" but blocks the command "UPDATE"
+//         const forbiddenPatterns = [
+//             /\bdrop\b/i,
+//             /\bdelete\b/i,
+//             /\bupdate\b/i, // Matches "UPDATE" but not "updated_at"
+//             /\binsert\b/i,
+//             /\balter\b/i,
+//             /\btruncate\b/i
+//         ];
+//
+//         // Check for forbidden SQL commands
+//         const isForbidden = forbiddenPatterns.some(pattern => pattern.test(sqlQuery));
+//
+//         // Check for specific forbidden tables (like 'users')
+//         const isSensitiveTable = /\busers\b/i.test(sqlQuery);
+//
+//         if (isForbidden || isSensitiveTable) {
+//             console.warn(`Blocked Query: ${sqlQuery}`);
+//             return "SECURITY_ALERT: Query blocked due to forbidden commands.";
+//         }
+//
+//         console.log("Executing SQL:", sqlQuery);
+//         const results = await db.sequelize.query(sqlQuery, { type: QueryTypes.SELECT });
+//
+//         if (!results || results.length === 0) {
+//             return "No records found in the database matching that criteria.";
+//         }
+//
+//         return JSON.stringify(results);
+//     } catch (e) {
+//         console.error("SQL Tool Error:", e);
+//         return "Error executing database query.";
+//     }
+// };
+//
+//
+// export async function processBotMessage(chat_id: string, userText: string): Promise<{ type: 'text' | 'handoff', content: string }> {
+//     try {
+//         const session = await db.ChatSession.findOne({ where: { chat_id } });
+//         if (!session) return { type: 'text', content: "Session expired." };
+//
+//         const history = await db.ChatMessage.findAll({
+//             where: { chat_id },
+//             order: [["createdAt", "DESC"]],
+//             limit: 8
+//         });
+//
+//         const vectorTool = new DynamicStructuredTool({
+//             name: "get_general_company_info",
+//             description: "PRIMARY SOURCE: Use this to check if a question is related to Indra Traders, services, locations, or policies.",
+//             schema: z.object({ query: z.string().describe("The specific search topic") }),
+//             func: async ({ query }) => await getGeneralContext(query),
+//         });
+//
+//         const handoffTool = new DynamicStructuredTool({
+//             name: "transfer_to_live_agent",
+//             description: "Use this if the user explicitly asks for a human, agent, or support.",
+//             schema: z.object({ reason: z.string() }),
+//             func: async ({ reason }) => {
+//                 return "HANDOFF_TRIGGERED_ACTION";
+//             },
+//         });
+//
+//         const dbTool = new DynamicStructuredTool({
+//             name: "check_vehicle_inventory",
+//             description: "Queries the SQL database for vehicle stock/prices, spare parts details.",
+//             schema: z.object({ question: z.string().describe("User question about stock") }),
+//             func: async ({ question }) => await queryDatabase(question),
+//         });
+//
+//         const tools: any[] = [vectorTool, handoffTool];
+//         if (session.user_type === 'registered') {
+//             tools.push(dbTool);
+//         }
+//
+//         // const systemPrompt = `You are 'Indra Assistant', the official AI for Indra Traders.
+//         //
+//         // CONTEXT:
+//         // - User: ${session.customer_name || 'Guest'}
+//         // - Type: ${session.user_type}
+//         // - Date: ${new Date().toDateString()}
+//         //
+//         // CRITICAL INSTRUCTIONS:
+//         // 1. **Knowledge Retrieval**: You do NOT know facts about Indra Traders internally. You MUST use the 'get_general_company_info' tool.
+//         // 2. **Hallucination Check**: If 'get_general_company_info' returns "NO_DATA_FOUND", politely say you don't have that information. Do NOT make up an answer.
+//         // 3. **Inventory**:
+//         //    - Registered Users: Use 'check_vehicle_inventory'.
+//         //    - Guests: Politely decline stock checks, but allow them to ask general questions or speak to an agent.
+//         // 4. **Live Agent**: Guests ARE allowed to speak to agents. Use the handoff tool if asked.
+//         // 5. **Formatting**: Keep answers concise and use Markdown.`;
+//
+//         const systemPrompt = `You are 'Indra Assistant', a specialized AI for Indra Traders.
+//
+//         CONTEXT:
+//         - User: ${session.customer_name || 'Guest'}
+//         - Type: ${session.user_type}
+//         - Date: ${new Date().toDateString()}
+//
+//         ⛔ **STRICT SCOPE PROTOCOL (MUST FOLLOW)**:
+//         1. **Domain Restriction**: You are ONLY allowed to answer questions about **Indra Traders, Vehicles, Spare Parts, and Services**.
+//         2. **General Knowledge Ban**: Do NOT answer general world questions (e.g., "Capital of India", "Who is the President", "Weather", "Math").
+//            - IF the user asks an off-topic question, you MUST reply: "I apologize, but I do not have information about that. I can only assist with inquiries related to Indra Traders vehicles and services.suggest: "Would you like to speak to a live agent?" and use the handoff tool if they agree."
+//         3. **Tool Reliance**: You do not know company facts internally. You MUST use 'get_general_company_info'.
+//            - IF the tool returns "No relevant documents found", assume the question is off-topic or unknown. Do NOT invent an answer.
+//         4. **Inventory**:
+//            - Registered Users: Use 'check_vehicle_inventory'.
+//            - Guests: Politely decline stock checks.
+//         5. **Live Agent**: If you cannot answer, or if the user asks, suggest: "Would you like to speak to a live agent?" and use the handoff tool if they agree.
+//         6. **Formatting**: Keep answers concise and use Markdown.
+//         `;
+//
+//         const agent = createAgent({
+//             model: llm,
+//             tools,
+//             systemPrompt,
+//         });
+//
+//         const chat_history = history.reverse().map(msg =>
+//             msg.sender === 'customer' ? new HumanMessage(msg.message) : new AIMessage(msg.message)
+//         );
+//
+//         const result = await agent.invoke({
+//             messages: [...chat_history, new HumanMessage(userText)],
+//         });
+//
+//         const messages = result.messages as BaseMessage[];
+//         const isHandoffTriggered = messages.some((msg) => {
+//             return (msg._getType() === "tool" && msg.content.toString().includes("HANDOFF_TRIGGERED_ACTION"));
+//         });
+//
+//         if (isHandoffTriggered) {
+//             console.log("🚀 Handoff Signal Detected via Tool Output");
+//             return { type: 'handoff', content: "I am connecting you to a live agent now..." };
+//         }
+//
+//         const lastMessage = messages[messages.length - 1];
+//         const outputText = lastMessage.content as string;
+//
+//         if (outputText.toLowerCase().includes("connecting you to a live agent")) {
+//             return { type: 'handoff', content: "I am connecting you to a live agent now..." };
+//         }
+//
+//         return { type: 'text', content: outputText };
+//
+//     } catch (error) {
+//         console.error("❌ Agent Runtime Error:", error);
+//         return { type: 'text', content: "I apologize, I encountered a temporary system error. Please try again." };
+//     }
+// }
+//
+// const onlineAgents = new Map<number, AgentPresence>();
+// const chatRoom = (chatId: string) => `chat:${chatId}`;
+// const getLangRoom = (lang: string) => `agents:lang:${lang}`;
+//
+// export default function initSocket(io: Server) {
+//     io.on("connection", (socket: Socket) => {
+//         const {role, chat_id, user_id} = socket.handshake.query as any;
+//
+//         if (chat_id) socket.join(chatRoom(String(chat_id)));
+//
+//         if (role === "agent" && user_id) {
+//             const uid = Number(user_id);
+//
+//             db.User.findByPk(uid).then((user: any) => {
+//                 if (user) {
+//                     const languages = user.languages || ["en"];
+//                     onlineAgents.set(uid, {userId: uid, socketId: socket.id, languages});
+//                     socket.join(`agent:${uid}`);
+//                     languages.forEach((lang: string) => {
+//                         socket.join(getLangRoom(lang));
+//                         console.log(`Agent ${uid} joined queue for language: ${lang}`);
+//                     });
+//                     io.to(socket.id).emit("agent.online", {user_id: uid});
+//                     console.log(`Agent ${uid} connected with languages: ${languages.join(", ")}`);
+//                 }
+//             }).catch((err: any) => console.error("Error fetching agent details", err));
+//         }
+//
+//         socket.on("message.customer", async (payload: MessagePayload) => {
+//             const {chat_id, text, attachment} = payload;
+//             const session = await db.ChatSession.findOne({where: {chat_id}}) as ChatSession;
+//             if (!session) return;
+//
+//             const customerMsg = await db.ChatMessage.create({
+//                 chat_id,
+//                 sender: "customer",
+//                 message: text || "",
+//                 viewed_by_agent: "no",
+//                 attachment_url: attachment?.url || null,
+//                 attachment_type: attachment?.type || "none",
+//                 file_name: attachment?.name || null,
+//             });
+//
+//             io.to(chatRoom(chat_id)).emit("message.new", customerMsg);
+//
+//             if (session.status === "bot" && text) {
+//                 try {
+//                     io.to(chatRoom(chat_id)).emit("typing", {by: 'bot'});
+//                     let inputForAi = text;
+//                     if (session.language !== 'en') {
+//                         inputForAi = await TranslateService.translateText(text, 'en');
+//                     }
+//
+//                     const botResult = await processBotMessage(chat_id, inputForAi);
+//
+//                     if (typeof botResult === 'object' && botResult.type === 'handoff') {
+//                         await session.update({status: 'queued', priority: 1});
+//                         io.emit("queue.updated");
+//                         let finalResponse = botResult.content;
+//                         if (session.language !== 'en') {
+//                             finalResponse = await TranslateService.translateText(finalResponse, session.language);
+//                         }
+//                         const sysMsg = await db.ChatMessage.create({
+//                             chat_id, sender: "system", message: finalResponse, viewed_by_agent: "no"
+//                         });
+//                         io.to(chatRoom(chat_id)).emit("message.new", sysMsg);
+//                         io.to(chatRoom(chat_id)).emit("stop_typing", {by: 'bot'});
+//                         return;
+//                     }
+//
+//                     let finalUserResponse = botResult.content;
+//                     if (session.language !== 'en') {
+//                         finalUserResponse = await TranslateService.translateText(finalUserResponse, session.language);
+//                     }
+//
+//                     const botMsg = await db.ChatMessage.create({
+//                         chat_id,
+//                         sender: "bot",
+//                         message: finalUserResponse,
+//                         viewed_by_agent: "no"
+//                     });
+//                     io.to(chatRoom(chat_id)).emit("message.new", botMsg);
+//
+//                 } catch (error: any) {
+//                     console.error("Socket-level Error:", error);
+//                     let fallbackMessage = "I'm sorry, I'm experiencing technical difficulties at the moment.";
+//                     if (error.code === 'insufficient_quota') {
+//                         fallbackMessage = "I'm sorry, our AI system is currently at capacity.";
+//                     }
+//                     const fallbackMsg = await db.ChatMessage.create({
+//                         chat_id, sender: "bot", message: fallbackMessage, viewed_by_agent: "no"
+//                     });
+//                     io.to(chatRoom(chat_id)).emit("message.new", fallbackMsg);
+//                 } finally {
+//                     io.to(chatRoom(chat_id)).emit("stop_typing", {by: 'bot'});
+//                 }
+//             } else if (session.status === "bot" && attachment) {
+//                 const botReply = await db.ChatMessage.create({
+//                     chat_id, sender: "bot",
+//                     message: "I received your attachment. An agent will review it shortly.",
+//                     viewed_by_agent: "no"
+//                 });
+//                 io.to(chatRoom(chat_id)).emit("message.new", botReply);
+//             } else {
+//                 await session.update({
+//                     last_message_at: new Date(),
+//                     unread_count: db.sequelize.literal("unread_count + 1")
+//                 });
+//             }
+//         });
+//
+//         socket.on("typing", ({chat_id, by}: { chat_id: string; by: "customer" | "agent" }) => {
+//             socket.to(chatRoom(chat_id)).emit("typing", {by, chat_id});
+//         });
+//
+//         socket.on("stop_typing", ({chat_id, by}: { chat_id: string; by: "customer" | "agent" }) => {
+//             socket.to(chatRoom(chat_id)).emit("stop_typing", {by, chat_id});
+//         });
+//
+//         socket.on("message.agent", async (payload: {
+//             chat_id: string;
+//             text: string;
+//             user_id: number;
+//             attachment?: any
+//         }) => {
+//             const {chat_id, text, attachment} = payload;
+//             const msg = await db.ChatMessage.create({
+//                 chat_id,
+//                 sender: "agent",
+//                 message: text || "",
+//                 viewed_by_agent: "yes",
+//                 attachment_url: attachment?.url || null,
+//                 attachment_type: attachment?.type || "none",
+//                 file_name: attachment?.name || null,
+//             });
+//             await db.ChatSession.update(
+//                 {last_message_at: new Date(), unread_count: 0},
+//                 {where: {chat_id}}
+//             );
+//             io.to(chatRoom(chat_id)).emit("message.new", msg);
+//         });
+//
+//         socket.on("request.agent", async ({chat_id, priority = 0, channel}: any) => {
+//             const session = await db.ChatSession.findOne({where: {chat_id}});
+//             if (!session) return;
+//             const requiredLanguage = session.language || 'en';
+//             await session.update({status: "queued", priority, channel: channel || session.channel});
+//             console.log(`Chat ${chat_id} queuing for language: ${requiredLanguage}`);
+//             io.to(getLangRoom(requiredLanguage)).emit("queue.updated");
+//         });
+//
+//         socket.on("agent.accept", async ({chat_id, user_id}: { chat_id: string; user_id: number }) => {
+//             const session = await db.ChatSession.findOne({where: {chat_id}});
+//             if (!session || session.status === "assigned" || session.status === "closed") return;
+//
+//             await session.update({status: "assigned", agent_id: user_id});
+//             io.to(chatRoom(chat_id)).emit("agent.joined", {agent_id: user_id});
+//             io.emit("queue.updated");
+//             io.to(`agent:${user_id}`).emit("chat.assigned");
+//         });
+//
+//         socket.on("agent.read", async ({chat_id}: { chat_id: string }) => {
+//             if (!chat_id) return;
+//             await db.ChatSession.update(
+//                 {unread_count: 0},
+//                 {where: {chat_id}}
+//             );
+//         });
+//
+//         socket.on("join.chat", ({chat_id}) => {
+//             if (!chat_id) return;
+//             socket.join(`chat:${chat_id}`);
+//             console.log(`Agent joined chat room: ${chat_id}`);
+//         });
+//
+//         socket.on("chat.close", async ({chat_id}: { chat_id: string }) => {
+//             const session = await db.ChatSession.findOne({where: {chat_id}});
+//             if (!session) return;
+//             await session.update({status: "closed"});
+//             io.to(chatRoom(chat_id)).emit("chat.closed");
+//         });
+//
+//         socket.on("disconnect", () => {
+//             if (role === "agent" && user_id) {
+//                 const uid = Number(user_id);
+//                 onlineAgents.delete(uid);
+//                 console.log(`Agent ${user_id} disconnected`);
+//             }
+//         });
+//     });
+// }
+
+
+import { Server, Socket } from "socket.io";
 import db from "../models";
-// import {OpenAI} from "openai"; // Not needed
-import {Pinecone} from "@pinecone-database/pinecone";
-import {FeatureExtractionPipeline, pipeline} from "@xenova/transformers";
-import Groq from "groq-sdk";
-import {QueryTypes} from "sequelize";
-import {TranslateService} from "../services/translate"; // Import QueryTypes
+import { Pinecone } from "@pinecone-database/pinecone";
+import { FeatureExtractionPipeline, pipeline } from "@xenova/transformers";
+import { QueryTypes } from "sequelize";
+import { TranslateService } from "../services/translate";
 
-import {ChatGroq} from "@langchain/groq";
-import {DynamicStructuredTool} from "@langchain/core/tools";
-import {z} from "zod";
-import {ChatPromptTemplate, MessagesPlaceholder} from "@langchain/core/prompts";
-import {createAgent} from "langchain";
-import {HumanMessage, AIMessage, BaseMessage, SystemMessage, ToolMessage} from "@langchain/core/messages";
-import {ChatSession} from "../models/chatSession.model";
 
-import { createReactAgent } from "@langchain/langgraph/prebuilt";
+import { ChatOpenAI } from "@langchain/openai";
+import { DynamicStructuredTool } from "@langchain/core/tools";
+import { z } from "zod";
+import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
+import { createAgent } from "langchain";
+import { ChatSession } from "../models/chatSession.model";
+
 
 type AgentPresence = {
     userId: number;
@@ -1623,11 +2151,22 @@ interface MessagePayload {
     }
 }
 
-const groq = new Groq({apiKey: process.env.OPENAI_API_KEY}); // Using your Groq key
-const pinecone = new Pinecone({apiKey: process.env.PINECONE_API_KEY!});
+interface BotResponse {
+    type: 'text' | 'handoff';
+    content: string;
+    action?: 'offer_agent' | 'offer_register';
+}
+
+const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY! });
+
+const llm = new ChatOpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    model: "gpt-4o",
+    temperature: 0,
+});
 
 let embedder: FeatureExtractionPipeline | null = null;
-let dbSchemaCache: string | null = null; // Cache the schema
+let dbSchemaCache: string | null = null;
 
 async function getEmbedder() {
     if (!embedder) {
@@ -1641,46 +2180,42 @@ export async function getGeneralContext(query: string): Promise<string> {
     try {
         const pipeline = await getEmbedder();
 
-        // Generate Embedding
         const result = await pipeline(query, { pooling: 'mean', normalize: true });
         const queryEmbedding = Array.from(result.data as number[]);
 
-        // Query Pinecone
         const index = pinecone.index(process.env.PINECONE_INDEX!);
         const searchRes = await index.query({
             vector: queryEmbedding,
-            topK: 4, // Increased to 4 for better context coverage
+            topK: 3,
             includeMetadata: true
         });
 
         if (!searchRes.matches || searchRes.matches.length === 0) {
-            return "No specific documents found regarding this query.";
+            return "NO_DATA_FOUND";
         }
 
-        // Format context for the LLM
-        return searchRes.matches
-            .filter(match => match.score && match.score > 0.40) // Filter low relevance noise
-            .map(match => `[Context]: ${match.metadata?.text}`)
+        const validMatches = searchRes.matches.filter(match => match.score && match.score > 0.45);
+
+        if (validMatches.length === 0) {
+            return "NO_RELEVANT_DATA_FOUND";
+        }
+
+        return validMatches
+            .map(match => `[Verified Company Info]: ${match.metadata?.text}`)
             .join("\n\n");
 
     } catch (error) {
         console.error("Vector Search Error:", error);
-        return "System Error: Unable to retrieve company information at this time.";
+        return "System Error: Unable to retrieve company information.";
     }
 }
 
 async function getDatabaseSchema() {
-    // Return from cache if we already have it
-    if (dbSchemaCache) {
-        return dbSchemaCache;
-    }
+    if (dbSchemaCache) return dbSchemaCache;
     try {
         const queryInterface = db.sequelize.getQueryInterface();
         let schemaString = "";
-
-        // --- DEFINE YOUR TABLES HERE ---
-        // Add all tables you want the AI to be able to query
-        const tablesToDescribe = ['vehicles', 'spare_parts']; // <<-- CHECK YOUR TABLE NAMES
+        const tablesToDescribe = ['vehicles', 'spare_parts'];
 
         for (const tableName of tablesToDescribe) {
             try {
@@ -1689,28 +2224,25 @@ async function getDatabaseSchema() {
                 for (const [column, attributes] of Object.entries(tableSchema)) {
                     schemaString += `  - ${column} (${(attributes as any).type})\n`;
                 }
-                schemaString += "\n"; // Add a space between tables
+                schemaString += "\n";
             } catch (tableError) {
                 console.warn(`Could not describe table ${tableName}. Skipping.`);
             }
         }
-
-        dbSchemaCache = schemaString; // Cache the result
+        dbSchemaCache = schemaString;
         return dbSchemaCache;
-
     } catch (error) {
         console.error("Error getting schema:", error);
         return "Error: Could not retrieve DB schema.";
     }
 }
 
-
 const queryDatabase = async (userQuestion: string) => {
     try {
         const schema = await getDatabaseSchema();
-        const sqlGenLLM = new ChatGroq({
+        const sqlGenLLM = new ChatOpenAI({
             apiKey: process.env.OPENAI_API_KEY,
-            model: "llama-3.3-70b-versatile",
+            model: "gpt-4o",
             temperature: 0
         });
 
@@ -1721,21 +2253,39 @@ const queryDatabase = async (userQuestion: string) => {
         User Question: ${userQuestion}
 
         Rules:
-        1. Return ONLY the raw SQL query. No markdown, no explanations.
+        1. Return ONLY the raw SQL query. Do not use Markdown (no \`\`\`sql tags).
         2. LIMIT results to 5 unless specified.
         3. Do not use sensitive tables (users, passwords).
         `;
 
         const aiMsg = await sqlGenLLM.invoke([new HumanMessage(sqlPrompt)]);
-        let sqlQuery = aiMsg.content.toString().replace(/```sql|```/g, "").trim();
 
-        const forbidden = ['drop', 'delete', 'update', 'insert', 'alter', 'users'];
-        if (forbidden.some(word => sqlQuery.toLowerCase().includes(word))) {
-            return "I cannot perform that query for security reasons.";
+        // 1. IMPROVED CLEANING: Remove markdown tags and whitespace
+        let sqlQuery = aiMsg.content.toString()
+            .replace(/```sql/g, "")
+            .replace(/```/g, "")
+            .trim();
+
+        const forbiddenPatterns = [
+            /\bdrop\b/i,
+            /\bdelete\b/i,
+            /\bupdate\b/i,
+            /\binsert\b/i,
+            /\balter\b/i,
+            /\btruncate\b/i
+        ];
+
+        const isForbidden = forbiddenPatterns.some(pattern => pattern.test(sqlQuery));
+
+        const isSensitiveTable = /\busers\b/i.test(sqlQuery);
+
+        if (isForbidden || isSensitiveTable) {
+            console.warn(`Blocked Query: ${sqlQuery}`);
+            return "SECURITY_ALERT: Query blocked due to forbidden commands.";
         }
 
         console.log("Executing SQL:", sqlQuery);
-        const results = await db.sequelize.query(sqlQuery, {type: QueryTypes.SELECT});
+        const results = await db.sequelize.query(sqlQuery, { type: QueryTypes.SELECT });
 
         if (!results || results.length === 0) {
             return "No records found in the database matching that criteria.";
@@ -1749,260 +2299,8 @@ const queryDatabase = async (userQuestion: string) => {
 };
 
 
-// const vectorTool = new DynamicStructuredTool({
-//     name: "get_general_company_info",
-//     description: "Retrieves information about Indra Traders, such as history, branches, contact details, services, and opening hours.",
-//     schema: z.object({ query: z.string().describe("The specific question or topic to search for.") }),
-//     func: async ({ query }) => await getGeneralContext(query),
-// });
-//
-// const dbTool = new DynamicStructuredTool({
-//     name: "check_vehicle_inventory",
-//     description: "Queries the database for vehicle stock, prices, or spare parts. Returns JSON data.",
-//     schema: z.object({ question: z.string().describe("The full user question regarding inventory.") }),
-//     func: async ({ question }) => await queryDatabase(question), // Ensure your queryDatabase is imported
-// });
-//
-// const handoffTool = new DynamicStructuredTool({
-//     name: "transfer_to_live_agent",
-//     description: "Triggers a handoff to a human agent. Use ONLY when the user explicitly agrees to speak to a person.",
-//     schema: z.object({ reason: z.string() }),
-//     func: async ({ reason }) => "HANDOFF_REQUESTED",
-// });
-
-
-const vectorTool = new DynamicStructuredTool({
-    name: "get_general_company_info",
-    description: "Retrieves info about Indra Traders: history, branches, contact, services.",
-    schema: z.object({ query: z.string().describe("Topic to search for") }),
-    func: async ({ query }) => await getGeneralContext(query),
-});
-
-// const dbTool = new DynamicStructuredTool({
-//     name: "check_vehicle_inventory",
-//     description: "Queries database for vehicle stock/prices.",
-//     schema: z.object({ question: z.string().describe("User question about stock") }),
-//     func: async ({ question }) => await queryDatabase(question),
-// });
-//
-// const handoffTool = new DynamicStructuredTool({
-//     name: "transfer_to_live_agent",
-//     description: "Use ONLY when user explicitly asks for a human.",
-//     schema: z.object({ reason: z.string() }),
-//     func: async ({ reason }) => "HANDOFF_TRIGGERED_ACTION",
-// });
-
-// const tools = [vectorTool, dbTool];
-
-
-const llm = new ChatGroq({
-    apiKey: process.env.OPENAI_API_KEY, // Ensure this env var is set
-    model: "llama-3.3-70b-versatile",
-    // model: "qwen/qwen3-32b",
-    temperature: 0.1,
-});
-
-
-
-// export async function processBotMessage(chat_id: string, userText: string): Promise<{ type: 'text' | 'handoff', content: string }> {
-//     try {
-//         // 1. Fetch Session & History
-//         const session = await db.ChatSession.findOne({ where: { chat_id } });
-//         if (!session) return { type: 'text', content: "Session expired." };
-//
-//         const history = await db.ChatMessage.findAll({
-//             where: { chat_id },
-//             order: [["createdAt", "DESC"]],
-//             limit: 2 // Keep context window manageable
-//         });
-//
-//         // 2. Prepare Tools
-//         const tools: any[] = [vectorTool, handoffTool];
-//         if (session.user_type === 'registered') {
-//             tools.push(dbTool);
-//         }
-//
-//         const llmWithTools = llm.bindTools(tools);
-//
-//         // 3. Construct Message Chain
-//         // Reverse history to be chronological: Oldest -> Newest
-//         const pastMessages = history.reverse().map(msg =>
-//             msg.sender === 'customer' ? new HumanMessage(msg.message) : new AIMessage(msg.message)
-//         );
-//
-//         // PROFESSIONAL SYSTEM PROMPT
-//         const systemPrompt = new SystemMessage(
-//             `You are 'Indra Assistant', the official AI for Indra Traders.
-//
-//             CONTEXT:
-//             - User Name: ${session.customer_name || 'Valued Customer'}
-//             - User Type: ${session.user_type} (Guest users cannot see specific vehicle inventory).
-//
-//             GUIDELINES:
-//             1. **Use Tools**: You cannot answer questions about the company or stock without using tools.
-//             2. **Inventory**: If a Guest asks about stock, politely explain that feature is for registered members, then ask if they have general questions.
-//             3. **Tone**: Professional, polite, concise, and helpful.
-//             4. **Formatting**: Use Markdown for lists and bold text.
-//
-//             CRITICAL ERROR HANDLING:
-//             - If the tool returns "No records found", apologize and suggest they contact support.
-//             - Do not invent information.`
-//         );
-//
-//         const messages: BaseMessage[] = [systemPrompt, ...pastMessages, new HumanMessage(userText)];
-//
-//         // 4. FIRST LLM CALL (Decide Intent)
-//         const aiResponse = await llmWithTools.invoke(messages);
-//
-//         const contentStr = aiResponse.content as string;
-//         if (contentStr.includes("<function=") || contentStr.includes("{\"query\":")) {
-//             console.log("Detected leaked function tag in text. Treating as tool processing error.");
-//             return { type: 'text', content: "I am checking our records for you. One moment please..." };
-//         }
-//
-//         // 5. Tool Handling Loop
-//         if (aiResponse.tool_calls && aiResponse.tool_calls.length > 0) {
-//             const toolCall = aiResponse.tool_calls[0];
-//
-//             // Handle Handoff immediately
-//             if (toolCall.name === 'transfer_to_live_agent') {
-//                 return { type: 'handoff', content: "Connecting you to an agent..." };
-//             }
-//
-//             // Execute the Tool
-//             let toolResult = "";
-//             console.log(`AI Calling Tool: ${toolCall.name}`);
-//
-//             if (toolCall.name === 'get_general_company_info') {
-//                 toolResult = await getGeneralContext(toolCall.args.query);
-//             } else if (toolCall.name === 'check_vehicle_inventory') {
-//                 if (session.user_type !== 'registered') {
-//                     toolResult = "ERROR: User is Guest. Access Denied to Inventory.";
-//                 } else {
-//                     toolResult = await queryDatabase(toolCall.args.question);
-//                 }
-//             }
-//
-//             // 6. SECOND LLM CALL (Synthesize Answer)
-//             // We feed the tool output back to the LLM so it can generate the final natural language response.
-//             const toolMessage = new ToolMessage({
-//                 tool_call_id: toolCall.id!, // Critical for binding
-//                 content: toolResult,
-//                 name: toolCall.name
-//             });
-//
-//             // Append the AI's "intent" and the "tool result" to history
-//             messages.push(aiResponse);
-//             messages.push(toolMessage);
-//
-//             const finalResponse = await llmWithTools.invoke(messages);
-//
-//             if (!finalResponse.content || (finalResponse.content as string).trim() === "") {
-//                 return { type: 'text', content: "I found the information, but I'm having trouble summarizing it. Could you ask specifically what you need?" };
-//             }
-//
-//             return { type: 'text', content: finalResponse.content as string };
-//         }
-//
-//         if (!aiResponse.content || (aiResponse.content as string).trim() === "") {
-//             return { type: 'text', content: "I'm listening. How can I help you with Indra Traders today?" };
-//         }
-//
-//         // If no tool was called, return the text
-//         return { type: 'text', content: aiResponse.content as string };
-//
-//     } catch (error) {
-//         console.error("Bot Error:", error);
-//         return { type: 'text', content: "I'm having a technical issue. Could you please rephrase that?" };
-//     }
-// }
-
-
-// export async function processBotMessage(chat_id: string, userText: string): Promise<{ type: 'text' | 'handoff', content: string }> {
-//     try {
-//         // 1. Fetch Session & History
-//         const session = await db.ChatSession.findOne({ where: { chat_id } });
-//         if (!session) return { type: 'text', content: "Session expired." };
-//
-//         const history = await db.ChatMessage.findAll({
-//             where: { chat_id },
-//             order: [["createdAt", "DESC"]],
-//             limit: 8
-//         });
-//
-//         // 2. Prepare Tools
-//         const tools: any[] = [vectorTool, handoffTool];
-//         if (session.user_type === 'registered') {
-//             tools.push(dbTool);
-//         }
-//
-//         // 3. Define the System Prompt
-//         // In LangGraph prebuilt agents, we pass this as a "messageModifier"
-//         const systemPrompt = `You are 'Indra Assistant', the official AI for Indra Traders.
-//
-//             CONTEXT:
-//             - User: ${session.customer_name || 'Guest'}
-//             - Type: ${session.user_type}
-//
-//             RULES:
-//             1. **SILENT TOOLS**: Do not output tags like <function=...> or JSON. Just use the tools.
-//             2. **Inventory**: Guest users cannot see stock. Politely decline.
-//             3. **Formatting**: Use Markdown.
-//             4. **Error Recovery**: If a tool returns an error, apologize and ask for clarification.
-//
-//             Current Time: ${new Date().toISOString()}`;
-//
-//         // 4. Create the LangGraph Agent
-//         // This replaces the old AgentExecutor. It is pre-compiled to handle tool calling loops.
-//         const agent = createReactAgent({
-//             llm,
-//             tools,
-//             messageModifier: systemPrompt, // This injects the system prompt automatically
-//         });
-//
-//         // 5. Convert DB History to LangChain Format
-//         const chat_history = history.reverse().map(msg =>
-//             msg.sender === 'customer' ? new HumanMessage(msg.message) : new AIMessage(msg.message)
-//         );
-//
-//         // 6. Invoke the Graph
-//         // LangGraph takes the state (messages) and returns the new state
-//         const result = await agent.invoke({
-//             messages: [...chat_history, new HumanMessage(userText)],
-//         });
-//
-//         const isHandoffTriggered = result.messages.some((msg: BaseMessage) => {
-//             // Check if this is a ToolMessage (the result of a tool)
-//             // AND if it contains our secret keyword
-//             return (msg._getType() === "tool" && msg.content.toString().includes("HANDOFF_TRIGGERED_ACTION"));
-//         });
-//
-//         if (isHandoffTriggered) {
-//             console.log("🚀 Handoff Signal Detected via Tool Output");
-//             return { type: 'handoff', content: "I am connecting you to a live agent now..." };
-//         }
-//
-//         // 7. Extract the Final Response
-//         // The result contains the full updated list of messages. The last one is the AI's final answer.
-//         const lastMessage = result.messages[result.messages.length - 1];
-//         const outputText = lastMessage.content as string;
-//
-//         // 8. Handoff Check
-//         if (outputText.includes("HANDOFF_TRIGGERED_ACTION") || outputText.toLowerCase().includes("connecting you to an agent")) {
-//             return { type: 'handoff', content: "I am connecting you to a live agent now..." };
-//         }
-//
-//         return { type: 'text', content: outputText };
-//
-//     } catch (error) {
-//         console.error("❌ LangGraph Error:", error);
-//         return { type: 'text', content: "I apologize, I encountered a temporary system error. How else can I help?" };
-//     }
-// }
-
-export async function processBotMessage(chat_id: string, userText: string): Promise<{ type: 'text' | 'handoff', content: string }> {
+export async function processBotMessage(chat_id: string, userText: string): Promise<BotResponse> {
     try {
-        // 1. Fetch Session & History
         const session = await db.ChatSession.findOne({ where: { chat_id } });
         if (!session) return { type: 'text', content: "Session expired." };
 
@@ -2012,100 +2310,106 @@ export async function processBotMessage(chat_id: string, userText: string): Prom
             limit: 8
         });
 
-        // 2. DEFINE TOOLS WITH SECURITY CONTEXT
-        // We define these here so we can access 'session.user_type' inside the tool.
+        const vectorTool = new DynamicStructuredTool({
+            name: "get_general_company_info",
+            description: "PRIMARY SOURCE: Use this to check if a question is related to Indra Traders, services, locations, or policies.",
+            schema: z.object({ query: z.string().describe("The specific search topic") }),
+            func: async ({ query }) => await getGeneralContext(query),
+        });
 
         const handoffTool = new DynamicStructuredTool({
             name: "transfer_to_live_agent",
-            description: "Use this ONLY when the user explicitly asks to speak to a human or live agent.",
+            description: "Use this if the user explicitly asks for a human, agent, or support.",
             schema: z.object({ reason: z.string() }),
             func: async ({ reason }) => {
-                // SECURITY CHECK: PREVENT GUEST ACCESS
-                if (session.user_type !== 'registered') {
-                    return "ACCESS DENIED: Guest users are not allowed to speak to live agents. Politely ask the user to login or register first.";
-                }
                 return "HANDOFF_TRIGGERED_ACTION";
             },
         });
 
         const dbTool = new DynamicStructuredTool({
             name: "check_vehicle_inventory",
-            description: "Queries database for vehicle stock/prices.",
+            description: "Queries the SQL database for vehicle stock/prices, spare parts details.",
             schema: z.object({ question: z.string().describe("User question about stock") }),
             func: async ({ question }) => await queryDatabase(question),
         });
 
-        // 3. Prepare Tool Array based on Role
         const tools: any[] = [vectorTool, handoffTool];
-
-        // Only give the DB tool to registered users
         if (session.user_type === 'registered') {
             tools.push(dbTool);
         }
 
-        // 4. Define the System Prompt
-        const systemPrompt = `You are 'Indra Assistant', the official AI for Indra Traders.
-            
-            CONTEXT:
-            - User: ${session.customer_name || 'Guest'}
-            - Type: ${session.user_type}
-            
-            RULES:
-            1. **SILENT TOOLS**: Do not output tags like <function=...> or JSON. Just use the tools.
-            2. **Inventory**: Guest users cannot see stock. Politely decline.
-            3. **Live Agent**: Guest users CANNOT access live agents. If a Guest asks, explain they must register first.
-            4. **Formatting**: Use Markdown.
-            
-            Current Time: ${new Date().toISOString()}`;
+        const systemPrompt = `You are 'Indra Assistant', a specialized AI for Indra Traders.
 
-        // 5. Create the LangGraph Agent
-        const agent = createReactAgent({
-            llm,
+        CONTEXT:
+        - User: ${session.customer_name || 'Guest'}
+        - Type: ${session.user_type}
+        - Date: ${new Date().toDateString()}
+
+        ⛔ **STRICT SCOPE PROTOCOL (MUST FOLLOW)**:
+        1. **Domain Restriction**: You are ONLY allowed to answer questions about **Indra Traders, Vehicles, Spare Parts, and Services**.
+        2. **General Knowledge Ban**: Do NOT answer general world questions (e.g., "Capital of India", "Who is the President", "Weather", "Math"). 
+           - IF the user asks an off-topic question, you MUST reply: "I apologize, but I do not have information about that. I can only assist with inquiries related to Indra Traders vehicles and services.suggest: "Would you like to speak to a live agent?" and use the handoff tool if they agree."
+        3. **Tool Reliance**: You do not know company facts internally. You MUST use 'get_general_company_info'.
+           - IF the tool returns "No relevant documents found", assume the question is off-topic or unknown. Do NOT invent an answer.
+        4. **Guest Inventory Access**: 
+           - If a **Guest** asks for vehicle details, stock, or prices, you MUST reply: "I apologize, but you are currently browsing as a Guest. Please register or login to view live vehicle inventory and prices."
+           - Do NOT attempt to use the database tool for guests.
+            - Registered Users: Use 'check_vehicle_inventory'.
+        5. **Live Agent**: If you cannot answer, or if the user asks, suggest: "Would you like to speak to a live agent?" and use the handoff tool if they agree.
+        6. **Formatting**: Keep answers concise and use Markdown.
+        `;
+
+        const agent = createAgent({
+            model: llm,
             tools,
-            messageModifier: systemPrompt,
+            systemPrompt,
         });
 
-        // 6. Convert DB History to LangChain Format
         const chat_history = history.reverse().map(msg =>
             msg.sender === 'customer' ? new HumanMessage(msg.message) : new AIMessage(msg.message)
         );
 
-        // 7. Invoke the Graph
         const result = await agent.invoke({
             messages: [...chat_history, new HumanMessage(userText)],
         });
 
-        // 8. Handoff Detection
-        // We check if the tool was called AND if it returned the success signal.
-        // If the tool returned "ACCESS DENIED", this check will fail (correctly).
-        const isHandoffTriggered = result.messages.some((msg: BaseMessage) => {
+        const messages = result.messages as BaseMessage[];
+        const isHandoffTriggered = messages.some((msg) => {
             return (msg._getType() === "tool" && msg.content.toString().includes("HANDOFF_TRIGGERED_ACTION"));
         });
 
         if (isHandoffTriggered) {
-            console.log("🚀 Handoff Signal Verified (User is Registered)");
+            console.log("🚀 Handoff Signal Detected via Tool Output");
             return { type: 'handoff', content: "I am connecting you to a live agent now..." };
         }
 
-        // 9. Extract Final Response
-        const lastMessage = result.messages[result.messages.length - 1];
+        const lastMessage = messages[messages.length - 1];
         const outputText = lastMessage.content as string;
 
-        return { type: 'text', content: outputText };
+        let action: 'offer_agent' | 'offer_register' | undefined;
+
+        if (outputText.includes("browsing as a Guest") || outputText.includes("Please register")) {
+            action = 'offer_register';
+        }
+        else if (outputText.toLowerCase().includes("speak to a live agent") || outputText.toLowerCase().includes("contact a live agent")) {
+            action = 'offer_agent';
+        }
+
+        if (outputText.toLowerCase().includes("connecting you to a live agent")) {
+            return { type: 'handoff', content: "I am connecting you to a live agent now..." };
+        }
+
+        return { type: 'text', content: outputText, action };
 
     } catch (error) {
-        console.error("❌ LangGraph Error:", error);
-        return { type: 'text', content: "I apologize, I encountered a temporary system error." };
+        console.error("❌ Agent Runtime Error:", error);
+        return { type: 'text', content: "I apologize, I encountered a temporary system error. Please try again." };
     }
 }
 
-
-
 const onlineAgents = new Map<number, AgentPresence>();
 const chatRoom = (chatId: string) => `chat:${chatId}`;
-
 const getLangRoom = (lang: string) => `agents:lang:${lang}`;
-
 
 export default function initSocket(io: Server) {
     io.on("connection", (socket: Socket) => {
@@ -2118,10 +2422,30 @@ export default function initSocket(io: Server) {
 
             db.User.findByPk(uid).then((user: any) => {
                 if (user) {
-                    const languages = user.languages || ["en"];
+                    let languages: string[] = ["en"];
 
+                    if (user.languages) {
+                        if (Array.isArray(user.languages)) {
+                            languages = user.languages;
+                        } else if (typeof user.languages === 'string') {
+                            try {
+                                const parsed = JSON.parse(user.languages);
+                                if (Array.isArray(parsed)) {
+                                    languages = parsed;
+                                }
+                            } catch (e) {
+                                console.error(`Failed to parse languages for agent ${uid}`, e);
+                            }
+                        }
+                    }
+
+                    // const languages = user.languages || ["en"];
                     onlineAgents.set(uid, {userId: uid, socketId: socket.id, languages});
                     socket.join(`agent:${uid}`);
+                    // languages.forEach((lang: string) => {
+                    //     socket.join(getLangRoom(lang));
+                    //     console.log(`Agent ${uid} joined queue for language: ${lang}`);
+                    // });
 
                     languages.forEach((lang: string) => {
                         socket.join(getLangRoom(lang));
@@ -2132,26 +2456,12 @@ export default function initSocket(io: Server) {
                     console.log(`Agent ${uid} connected with languages: ${languages.join(", ")}`);
                 }
             }).catch((err: any) => console.error("Error fetching agent details", err));
-
-
-            // markUserOnline(uid, socket.id);
-
-            // socket.join(`agent:${uid}`);
-            // io.to(socket.id).emit("agent.online", {user_id: uid});
-            // console.log(`Agent ${uid} connected`);
         }
 
-        // socket.on("message.customer", async ({chat_id, text}: { chat_id: string, text: string }) => {
         socket.on("message.customer", async (payload: MessagePayload) => {
-
             const {chat_id, text, attachment} = payload;
-
             const session = await db.ChatSession.findOne({where: {chat_id}}) as ChatSession;
             if (!session) return;
-
-            // const customerMsg = await db.ChatMessage.create({
-            //     chat_id, sender: "customer", message: text, viewed_by_agent: "no"
-            // });
 
             const customerMsg = await db.ChatMessage.create({
                 chat_id,
@@ -2168,8 +2478,6 @@ export default function initSocket(io: Server) {
             if (session.status === "bot" && text) {
                 try {
                     io.to(chatRoom(chat_id)).emit("typing", {by: 'bot'});
-
-
                     let inputForAi = text;
                     if (session.language !== 'en') {
                         inputForAi = await TranslateService.translateText(text, 'en');
@@ -2179,33 +2487,23 @@ export default function initSocket(io: Server) {
 
                     if (typeof botResult === 'object' && botResult.type === 'handoff') {
                         await session.update({status: 'queued', priority: 1});
-
                         io.emit("queue.updated");
-
                         let finalResponse = botResult.content;
                         if (session.language !== 'en') {
                             finalResponse = await TranslateService.translateText(finalResponse, session.language);
                         }
-
                         const sysMsg = await db.ChatMessage.create({
                             chat_id, sender: "system", message: finalResponse, viewed_by_agent: "no"
                         });
-
                         io.to(chatRoom(chat_id)).emit("message.new", sysMsg);
                         io.to(chatRoom(chat_id)).emit("stop_typing", {by: 'bot'});
                         return;
                     }
 
-                    // const englishResponse = (botResult as any).content || botResult;
-
                     let finalUserResponse = botResult.content;
                     if (session.language !== 'en') {
                         finalUserResponse = await TranslateService.translateText(finalUserResponse, session.language);
                     }
-
-                    // const finalBotResponse = await processBotMessage(chat_id, text);
-
-                    // io.to(chatRoom(chat_id)).emit("stop_typing", {by: 'bot'});
 
                     const botMsg = await db.ChatMessage.create({
                         chat_id,
@@ -2213,15 +2511,18 @@ export default function initSocket(io: Server) {
                         message: finalUserResponse,
                         viewed_by_agent: "no"
                     });
-                    io.to(chatRoom(chat_id)).emit("message.new", botMsg);
+                    // io.to(chatRoom(chat_id)).emit("message.new", botMsg);
+
+                    io.to(chatRoom(chat_id)).emit("message.new", {
+                        ...botMsg.toJSON(),
+                        action: botResult.action
+                    });
 
                 } catch (error: any) {
                     console.error("Socket-level Error:", error);
-                    // io.to(chatRoom(chat_id)).emit("stop_typing", {by: 'bot'});
-
-                    let fallbackMessage = "I'm sorry, I'm experiencing technical difficulties at the moment. Please try again, or click 'Talk to a Live Agent' for immediate assistance.";
+                    let fallbackMessage = "I'm sorry, I'm experiencing technical difficulties at the moment.";
                     if (error.code === 'insufficient_quota') {
-                        fallbackMessage = "I'm sorry, our AI system is currently at capacity. Please try again in a few moments or request a live agent.";
+                        fallbackMessage = "I'm sorry, our AI system is currently at capacity.";
                     }
                     const fallbackMsg = await db.ChatMessage.create({
                         chat_id, sender: "bot", message: fallbackMessage, viewed_by_agent: "no"
@@ -2245,7 +2546,6 @@ export default function initSocket(io: Server) {
             }
         });
 
-        // ... (Rest of your socket handlers: typing, stop_typing, message.agent, etc.) ...
         socket.on("typing", ({chat_id, by}: { chat_id: string; by: "customer" | "agent" }) => {
             socket.to(chatRoom(chat_id)).emit("typing", {by, chat_id});
         });
@@ -2254,11 +2554,6 @@ export default function initSocket(io: Server) {
             socket.to(chatRoom(chat_id)).emit("stop_typing", {by, chat_id});
         });
 
-        // socket.on("message.agent", async ({chat_id, text, user_id}: {
-        //     chat_id: string;
-        //     text: string;
-        //     user_id: number
-        // }) => {
         socket.on("message.agent", async (payload: {
             chat_id: string;
             text: string;
@@ -2266,7 +2561,6 @@ export default function initSocket(io: Server) {
             attachment?: any
         }) => {
             const {chat_id, text, attachment} = payload;
-
             const msg = await db.ChatMessage.create({
                 chat_id,
                 sender: "agent",
@@ -2283,48 +2577,22 @@ export default function initSocket(io: Server) {
             io.to(chatRoom(chat_id)).emit("message.new", msg);
         });
 
-        // socket.on("request.agent", async ({chat_id, priority = 0, channel}: any) => {
-        //     const session = await db.ChatSession.findOne({where: {chat_id}});
-        //     if (!session) return;
-        //
-        //     await session.update({status: "queued", priority, channel: channel || session.channel});
-        //     io.emit("queue.updated");
-        // });
-
-        // -------------------------
         socket.on("request.agent", async ({chat_id, priority = 0, channel}: any) => {
             const session = await db.ChatSession.findOne({where: {chat_id}});
             if (!session) return;
-
-            // Determine the target language from the session
             const requiredLanguage = session.language || 'en';
-
             await session.update({status: "queued", priority, channel: channel || session.channel});
-
-            // BROADCAST STRATEGY:
-            // Only emit "queue.updated" to agents who speak the required language.
-            // This prevents agents who don't know Tamil from seeing Tamil chats in their queue (if your frontend filters based on this event)
-
             console.log(`Chat ${chat_id} queuing for language: ${requiredLanguage}`);
-
-            // Emit to the specific language room
             io.to(getLangRoom(requiredLanguage)).emit("queue.updated");
-
-            // Optional: Also emit to 'agents:lang:en' as a fallback if it's a critical issue?
-            // For now, we stick to strict routing.
         });
-        // ------------------------------------------------------
 
         socket.on("agent.accept", async ({chat_id, user_id}: { chat_id: string; user_id: number }) => {
             const session = await db.ChatSession.findOne({where: {chat_id}});
-            if (!session || session.status === "assigned" || session.status === "closed") {
-                return;
-            }
+            if (!session || session.status === "assigned" || session.status === "closed") return;
 
             await session.update({status: "assigned", agent_id: user_id});
             io.to(chatRoom(chat_id)).emit("agent.joined", {agent_id: user_id});
             io.emit("queue.updated");
-
             io.to(`agent:${user_id}`).emit("chat.assigned");
         });
 
@@ -2346,17 +2614,15 @@ export default function initSocket(io: Server) {
             const session = await db.ChatSession.findOne({where: {chat_id}});
             if (!session) return;
             await session.update({status: "closed"});
-
             io.to(chatRoom(chat_id)).emit("chat.closed");
         });
 
         socket.on("disconnect", () => {
             if (role === "agent" && user_id) {
-                // markUserOffline(Number(user_id));
                 const uid = Number(user_id);
                 onlineAgents.delete(uid);
                 console.log(`Agent ${user_id} disconnected`);
             }
         });
-    })
+    });
 }
