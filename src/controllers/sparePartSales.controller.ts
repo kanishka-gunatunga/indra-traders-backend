@@ -37,16 +37,70 @@ export const createSale = async (req: Request, res: Response) => {
     }
 };
 
+// export const listSales = async (req: Request, res: Response) => {
+//     try {
+//         const {status, assigned_sales_id, call_agent_id} = req.query;
+//         const where: any = {};
+//         if (status) where.status = String(status).toUpperCase();
+//         if (assigned_sales_id) where.assigned_sales_id = Number(assigned_sales_id);
+//         if (call_agent_id) where.call_agent_id = Number(call_agent_id);
+//
+//         const sales = await SparePartSale.findAll({
+//             where,
+//             include: [
+//                 {model: Customer, as: "customer"},
+//                 {model: User, as: "callAgent", attributes: ["id", "full_name", "contact_no", "email"]},
+//                 {model: User, as: "salesUser", attributes: ["id", "full_name", "contact_no", "email"]},
+//             ],
+//             order: [["createdAt", "DESC"]],
+//         });
+//         res.status(http.OK).json(sales);
+//     } catch (err) {
+//         console.error("listSales error:", err);
+//         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+//     }
+// };
+
+
 export const listSales = async (req: Request, res: Response) => {
     try {
-        const {status, assigned_sales_id, call_agent_id} = req.query;
-        const where: any = {};
-        if (status) where.status = String(status).toUpperCase();
-        if (assigned_sales_id) where.assigned_sales_id = Number(assigned_sales_id);
-        if (call_agent_id) where.call_agent_id = Number(call_agent_id);
+        const userId = (req as any).user?.id || req.query.userId;
+
+        const {status, call_agent_id} = req.query;
+        const statusUpper = status ? String(status).toUpperCase() : undefined;
+
+        let whereClause: any = {};
+
+        if (call_agent_id) {
+            whereClause.call_agent_id = Number(call_agent_id);
+        }
+
+        if (statusUpper) {
+            if (statusUpper === "NEW") {
+                whereClause.status = "NEW";
+            } else {
+                if (!userId) {
+                    return res.status(http.UNAUTHORIZED).json({message: "User ID required to view assigned leads"});
+                }
+                whereClause.status = statusUpper;
+                whereClause.assigned_sales_id = userId;
+            }
+        } else {
+            if (userId) {
+                whereClause = {
+                    ...whereClause,
+                    [Op.or]: [
+                        {status: "NEW"},
+                        {assigned_sales_id: userId}
+                    ]
+                };
+            } else {
+                whereClause.status = "NEW";
+            }
+        }
 
         const sales = await SparePartSale.findAll({
-            where,
+            where: whereClause,
             include: [
                 {model: Customer, as: "customer"},
                 {model: User, as: "callAgent", attributes: ["id", "full_name", "contact_no", "email"]},
@@ -277,25 +331,25 @@ export const getNearestRemindersBySalesUser = async (req: Request, res: Response
 
 export const updatePriority = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
-        const { priority } = req.body;
+        const {id} = req.params;
+        const {priority} = req.body;
 
         if (priority === undefined || isNaN(priority)) {
-            return res.status(400).json({ message: "Valid priority is required" });
+            return res.status(400).json({message: "Valid priority is required"});
         }
 
         const sale = await SparePartSale.findByPk(id);
 
         if (!sale) {
-            return res.status(404).json({ message: "Sale not found" });
+            return res.status(404).json({message: "Sale not found"});
         }
 
         sale.priority = priority;
         await sale.save();
 
-        return res.status(200).json({ message: "Priority updated", sale });
+        return res.status(200).json({message: "Priority updated", sale});
     } catch (err) {
         console.error("updatePriority error:", err);
-        res.status(500).json({ message: "Server error" });
+        res.status(500).json({message: "Server error"});
     }
 };

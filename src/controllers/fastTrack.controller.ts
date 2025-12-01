@@ -574,7 +574,7 @@ const {
     FastTrackReminder,
 } = db;
 
-/** 1) Call agent creates a direct request */
+
 export const createDirectRequest = async (req: Request, res: Response) => {
     try {
         const payload = req.body;
@@ -620,7 +620,6 @@ export const listDirectRequests = async (req: Request, res: Response) => {
     }
 };
 
-/** 3) Telemarketer adds a reminder to a direct request */
 export const addDirectRequestReminder = async (req: Request, res: Response) => {
     try {
         const direct_request_id = Number(req.params.directRequestId);
@@ -636,7 +635,7 @@ export const addDirectRequestReminder = async (req: Request, res: Response) => {
     }
 };
 
-/** 4) Find and persist best matches for a request */
+
 export const buildBestMatches = async (req: Request, res: Response) => {
     try {
         const direct_request_id = Number(req.params.directRequestId);
@@ -677,7 +676,7 @@ export const buildBestMatches = async (req: Request, res: Response) => {
     }
 };
 
-/** 5) Vehicle quick view for a best match */
+
 export const getVehicleDetails = async (req: Request, res: Response) => {
     try {
         const id = Number(req.params.vehicleId);
@@ -690,7 +689,7 @@ export const getVehicleDetails = async (req: Request, res: Response) => {
     }
 };
 
-/** 6) Assign a best match to sales. Creates NEW lead. Marks DR as ASSIGNED. */
+
 export const assignBestMatchToSale = async (req: Request, res: Response) => {
     try {
         const direct_request_id = Number(req.params.directRequestId);
@@ -726,7 +725,7 @@ export const assignBestMatchToSale = async (req: Request, res: Response) => {
     }
 };
 
-/** 7) Sales user claims a lead */
+
 export const claimSaleLead = async (req: Request, res: Response) => {
     try {
         const saleId = Number(req.params.saleId);
@@ -746,7 +745,7 @@ export const claimSaleLead = async (req: Request, res: Response) => {
     }
 };
 
-/** 8) Update sale status to WON or LOST */
+
 export const updateSaleStatus = async (req: Request, res: Response) => {
     try {
         const saleId = Number(req.params.saleId);
@@ -769,7 +768,7 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
     }
 };
 
-/** 9) Update sale priority (integer) */
+
 export const updateSalePriority = async (req: Request, res: Response) => {
     try {
         const saleId = Number(req.params.saleId);
@@ -787,7 +786,7 @@ export const updateSalePriority = async (req: Request, res: Response) => {
     }
 };
 
-/** 10) Create sale followup */
+
 export const createSaleFollowup = async (req: Request, res: Response) => {
     try {
         const {sale_id, activity, activity_date} = req.body;
@@ -802,7 +801,7 @@ export const createSaleFollowup = async (req: Request, res: Response) => {
     }
 };
 
-/** 11) Create sale reminder */
+
 export const createSaleReminder = async (req: Request, res: Response) => {
     try {
         const {sale_id, task_title, task_date, note} = req.body;
@@ -817,7 +816,7 @@ export const createSaleReminder = async (req: Request, res: Response) => {
     }
 };
 
-/** 12) Lookups */
+
 export const getSaleByTicket = async (req: Request, res: Response) => {
     try {
         const {ticket} = req.params;
@@ -838,19 +837,73 @@ export const getSaleByTicket = async (req: Request, res: Response) => {
     }
 };
 
+// export const listSales = async (req: Request, res: Response) => {
+//     try {
+//         const {status, assigned_sales_id} = req.query;
+//         const where: any = {};
+//         if (status) where.status = String(status);
+//         if (assigned_sales_id) where.assigned_sales_id = Number(assigned_sales_id);
+//
+//         const rows = await FastTrackSale.findAll({
+//             where,
+//             include: [
+//                 {model: Customer, as: "customer"},
+//                 {model: VehicleListing, as: "vehicle"},
+//                 {model: User, as: "salesUser", attributes: ["id", "full_name"]},
+//             ],
+//             order: [["createdAt", "DESC"]],
+//         });
+//
+//         return res.status(http.OK).json(rows);
+//     } catch (e) {
+//         console.error("listSales", e);
+//         return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+//     }
+// };
+
+
 export const listSales = async (req: Request, res: Response) => {
     try {
-        const {status, assigned_sales_id} = req.query;
-        const where: any = {};
-        if (status) where.status = String(status);
-        if (assigned_sales_id) where.assigned_sales_id = Number(assigned_sales_id);
+        const userId = (req as any).user?.id || req.query.userId;
+        const { status, assigned_sales_id } = req.query;
+        const statusStr = status ? String(status) : undefined;
+
+        let where: any = {};
+
+        if (assigned_sales_id) {
+            where.assigned_sales_id = Number(assigned_sales_id);
+        }
+
+        if (statusStr) {
+            if (statusStr === "NEW") {
+                where.status = "NEW";
+            } else {
+                if (!userId) {
+                    return res.status(http.UNAUTHORIZED).json({ message: "User ID required" });
+                }
+                where.status = statusStr;
+                where.assigned_sales_id = userId;
+            }
+        } else {
+            if (userId) {
+                where = {
+                    ...where,
+                    [Op.or]: [
+                        { status: "NEW" },
+                        { assigned_sales_id: userId }
+                    ]
+                };
+            } else {
+                where.status = "NEW";
+            }
+        }
 
         const rows = await FastTrackSale.findAll({
             where,
             include: [
-                {model: Customer, as: "customer"},
-                {model: VehicleListing, as: "vehicle"},
-                {model: User, as: "salesUser", attributes: ["id", "full_name"]},
+                { model: Customer, as: "customer" },
+                { model: VehicleListing, as: "vehicle" },
+                { model: User, as: "salesUser", attributes: ["id", "full_name"] },
             ],
             order: [["createdAt", "DESC"]],
         });

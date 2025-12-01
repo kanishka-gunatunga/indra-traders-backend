@@ -56,7 +56,6 @@ export const requestAgent = async (req: Request, res: Response) => {
     }
 };
 
-/** Agents list queued chats (for dashboards) */
 // export const listQueue = async (req: Request, res: Response) => {
 //     try {
 //
@@ -111,9 +110,7 @@ export const listQueue = async (req: Request, res: Response) => {
             return res.status(http.NOT_FOUND).json({ message: "Agent not found" });
         }
 
-        // Ensure we have a valid array of languages.
-        // Handles cases where Sequelize might return it as a string or null.
-        let agentLangs: string[] = ["en"]; // Default fallback
+        let agentLangs: string[] = ["en"];
         if (agent.languages) {
             if (Array.isArray(agent.languages)) {
                 agentLangs = agent.languages;
@@ -126,7 +123,6 @@ export const listQueue = async (req: Request, res: Response) => {
             }
         }
 
-        // Query: Status is 'queued' AND Session Language is in Agent's Languages
         const rows = await db.ChatSession.findAll({
             where: {
                 status: "queued",
@@ -140,7 +136,7 @@ export const listQueue = async (req: Request, res: Response) => {
             ],
             include: [
                 {
-                    model: db.ChatMessage, // Optional: Include last message for preview
+                    model: db.ChatMessage,
                     as: 'messages',
                     limit: 1,
                     order: [['createdAt', 'DESC']]
@@ -190,7 +186,7 @@ export const listQueue = async (req: Request, res: Response) => {
 //     }
 // };
 
-/** Agent claims a chat manually (alternative to socket 'agent.accept') */
+
 export const assignChat = async (req: Request, res: Response) => {
     try {
         const {chat_id} = req.params;
@@ -212,7 +208,7 @@ export const assignChat = async (req: Request, res: Response) => {
     }
 };
 
-/** Close a chat (either side) */
+
 export const closeChat = async (req: Request, res: Response) => {
     try {
         const {chat_id} = req.params;
@@ -227,7 +223,7 @@ export const closeChat = async (req: Request, res: Response) => {
     }
 };
 
-/** Fetch messages */
+
 export const getMessages = async (req: Request, res: Response) => {
     try {
         const {chat_id} = req.params;
@@ -247,7 +243,7 @@ export const getMessages = async (req: Request, res: Response) => {
     }
 };
 
-/** Agent's assigned chats (sidebar list) */
+
 export const myAssigned = async (req: Request, res: Response) => {
     try {
         const {user_id} = req.params;
@@ -291,7 +287,6 @@ export const rateAgent = async (req: Request, res: Response) => {
         const {chat_id} = req.params;
         const {rating, message} = req.body;
 
-        // Validate input
         if (!rating && !message) {
             return res.status(400).json({error: "Rating or message required"});
         }
@@ -302,7 +297,6 @@ export const rateAgent = async (req: Request, res: Response) => {
             return res.status(404).json({error: "Chat session not found"});
         }
 
-        // Update the session with rating data
         await session.update({
             agent_rating: rating || null,
             rating_message: message || null
@@ -347,7 +341,7 @@ export const getRatedSessions = async (req: Request, res: Response) => {
                 {
                     model: db.User,
                     as: 'agent',
-                    attributes: ['id', 'full_name', 'email'] // Only fetch necessary agent fields
+                    attributes: ['id', 'full_name', 'email']
                 }
             ],
             order: [['updatedAt', 'DESC']]
@@ -369,7 +363,7 @@ export const getAgentSessions = async (req: Request, res: Response) => {
         const {count, rows} = await db.ChatSession.findAndCountAll({
             where: {
                 agent_id: {
-                    [Op.ne]: null as any // Filter for sessions where an agent was ever assigned
+                    [Op.ne]: null as any
                 }
             },
             include: [
@@ -401,7 +395,7 @@ export const getSessionHistory = async (req: Request, res: Response) => {
     try {
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 10;
-        const filter = req.query.filter as string || 'all'; // 'agent', 'bot', 'all'
+        const filter = req.query.filter as string || 'all';
         const offset = (page - 1) * limit;
 
         const whereClause: any = {};
@@ -477,7 +471,6 @@ export const verifyCustomer = async (req: Request, res: Response) => {
             return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Failed to send email. Please try again."});
         }
 
-        // Mask email for security in response (e.g., j***@gmail.com)
         const maskedEmail = customer.email.replace(/(.{2})(.*)(@.*)/, "$1***$3");
 
         return res.status(http.OK).json({

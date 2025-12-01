@@ -61,7 +61,7 @@ export default (sequelize: Sequelize) => {
             },
             branch: {
                 type: DataTypes.ENUM("BAMBALAPITIYA", "KANDY", "JAFFNA", "GALLE", "NEGOMBO"),
-                allowNull: false,
+                allowNull: true,
             },
             password: {
                 type: DataTypes.STRING(255),

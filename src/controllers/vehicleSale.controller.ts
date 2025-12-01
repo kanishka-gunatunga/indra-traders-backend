@@ -49,16 +49,73 @@ export const createVehicleSale = async (req: Request, res: Response) => {
 };
 
 
+// export const getVehicleSales = async (req: Request, res: Response) => {
+//     try {
+//         const statusParam = req.query.status;
+//
+//         const status =
+//             typeof statusParam === "string" ? statusParam.toUpperCase() : undefined;
+//
+//         const whereClause = status
+//             ? {status}
+//             : undefined;
+//
+//         const sales = await VehicleSale.findAll({
+//             where: whereClause,
+//             include: [
+//                 {model: Customer, as: "customer"},
+//                 {model: User, as: "callAgent"},
+//                 {model: User, as: "salesUser"},
+//             ],
+//         });
+//
+//         res.status(http.OK).json(sales);
+//     } catch (error) {
+//         console.error("Error fetching vehicle sales:", error);
+//         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+//     }
+// };
+
 export const getVehicleSales = async (req: Request, res: Response) => {
     try {
+        const userId = (req as any).user?.id || req.query.userId;
+
         const statusParam = req.query.status;
 
         const status =
             typeof statusParam === "string" ? statusParam.toUpperCase() : undefined;
 
-        const whereClause = status
-            ? {status}
-            : undefined;
+        let whereClause: any = {};
+
+        // const whereClause = status
+        //     ? {status}
+        //     : undefined;
+
+        if (status) {
+            if (status === "NEW") {
+                whereClause = { status: "NEW" };
+            } else {
+                if (!userId) {
+                    return res.status(http.UNAUTHORIZED).json({message:"User ID required for this status"});
+                }
+
+                whereClause = {
+                    status: status,
+                    assigned_sales_id: userId
+                };
+            }
+        } else {
+            if (userId) {
+                whereClause = {
+                    [Op.or]: [
+                        { status: "NEW" },
+                        { assigned_sales_id: userId }
+                    ]
+                };
+            } else {
+                whereClause = { status: "NEW" };
+            }
+        }
 
         const sales = await VehicleSale.findAll({
             where: whereClause,
@@ -67,6 +124,7 @@ export const getVehicleSales = async (req: Request, res: Response) => {
                 {model: User, as: "callAgent"},
                 {model: User, as: "salesUser"},
             ],
+            order: [["createdAt", "DESC"]],
         });
 
         res.status(http.OK).json(sales);
@@ -154,18 +212,60 @@ export const deleteVehicleSale = async (req: Request, res: Response) => {
     }
 };
 
+// export const getVehicleSalesByStatus = async (req: Request, res: Response) => {
+//     try {
+//         const {status} = req.params;
+//
+//         const whereClause = {status: status.toUpperCase()};
+//
+//         const sales = await VehicleSale.findAll({
+//             where: whereClause,
+//             include: [
+//                 {model: Customer, as: "customer"},
+//                 {model: User, as: "callAgent"},
+//                 {model: User, as: "salesUser"},
+//             ],
+//             order: [["createdAt", "DESC"]],
+//         });
+//
+//         res.status(http.OK).json({
+//             message: "Vehicle sales fetched successfully by status",
+//             sales,
+//         });
+//     } catch (error) {
+//         console.error("Error fetching vehicle sales by status:", error);
+//         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+//     }
+// };
+
+
 export const getVehicleSalesByStatus = async (req: Request, res: Response) => {
     try {
-        const {status} = req.params;
+        const userId = (req as any).user?.id || req.query.userId;
+        const { status } = req.params;
+        const statusUpper = status.toUpperCase();
 
-        const whereClause = {status: status.toUpperCase()};
+        let whereClause: any = {};
+
+        if (statusUpper === "NEW") {
+            whereClause = { status: "NEW" };
+        } else {
+            if (!userId) {
+                return res.status(http.UNAUTHORIZED).json({ message: "User ID required" });
+            }
+            whereClause = {
+                status: statusUpper,
+                assigned_sales_id: userId
+            };
+        }
+
 
         const sales = await VehicleSale.findAll({
             where: whereClause,
             include: [
-                {model: Customer, as: "customer"},
-                {model: User, as: "callAgent"},
-                {model: User, as: "salesUser"},
+                { model: Customer, as: "customer" },
+                { model: User, as: "callAgent" },
+                { model: User, as: "salesUser" },
             ],
             order: [["createdAt", "DESC"]],
         });

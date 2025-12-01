@@ -201,14 +201,50 @@ export const listVehicleHistories = async (req: Request, res: Response) => {
 };
 
 
+// export const listServiceParkSales = async (req: Request, res: Response) => {
+//     try {
+//         const sales = await ServiceParkSale.findAll({
+//             include: [
+//                 {model: Customer, as: "customer"},
+//                 {model: ServiceParkVehicleHistory, as: "vehicle"},
+//                 {model: User, as: "salesUser", attributes: ["id", "full_name", "email"]},
+//             ],
+//         });
+//
+//         return res.status(200).json({data: sales});
+//     } catch (error: any) {
+//         console.error(error);
+//         return res.status(500).json({message: "Internal server error", error: error.message});
+//     }
+// };
+
+
 export const listServiceParkSales = async (req: Request, res: Response) => {
     try {
+
+        const userId = (req as any).user?.id || req.query.userId;
+
+        let whereClause: any = {};
+
+        if (userId) {
+            whereClause = {
+                [Op.or]: [
+                    { status: "NEW" },
+                    { sales_user_id: userId }
+                ]
+            };
+        } else {
+            whereClause = { status: "NEW" };
+        }
+
         const sales = await ServiceParkSale.findAll({
+            where: whereClause,
             include: [
-                {model: Customer, as: "customer"},
-                {model: ServiceParkVehicleHistory, as: "vehicle"},
-                {model: User, as: "salesUser", attributes: ["id", "full_name", "email"]},
+                { model: Customer, as: "customer" },
+                { model: ServiceParkVehicleHistory, as: "vehicle" },
+                { model: User, as: "salesUser", attributes: ["id", "full_name", "email"] },
             ],
+            order: [["createdAt", "DESC"]]
         });
 
         return res.status(200).json({data: sales});

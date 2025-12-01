@@ -60,9 +60,12 @@ export const createUser = async (req: Request, res: Response) => {
         });
 
         res.status(http.CREATED).json({message: "User created successfully", user});
-    } catch (error) {
-        console.error("Create user error:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error creating user", error});
+    } catch (error: any) {
+        console.error("Update User Error:", error);
+        res.status(http.INTERNAL_SERVER_ERROR).json({
+            message: "Error updating user",
+            error: error.message || "Unknown error"
+        });
     }
 };
 

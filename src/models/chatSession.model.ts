@@ -88,7 +88,7 @@ export default (sequelize: Sequelize) => {
     ChatSession.init(
         {
             id: {type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true},
-            chat_id: {type: DataTypes.STRING(64), allowNull: false, unique: true},
+            chat_id: {type: DataTypes.STRING(64), allowNull: false},
             status: {
                 type: DataTypes.ENUM("bot", "queued", "assigned", "closed"),
                 allowNull: false,

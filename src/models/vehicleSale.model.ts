@@ -9,7 +9,7 @@ export interface VehicleSaleAttributes {
     id: number;
     ticket_number: string;
     date: Date;
-    status: "NEW" | "ONGOING" | "COMPLETED";
+    status: "NEW" | "ONGOING" | "WON" | "LOST";
     customer_id: string;
     call_agent_id: number;
     assigned_sales_id?: number | null;
@@ -36,7 +36,7 @@ class VehicleSale
     public id!: number;
     public ticket_number!: string;
     public date!: Date;
-    public status!: "NEW" | "ONGOING" | "COMPLETED";
+    public status!: "NEW" | "ONGOING" | "WON" | "LOST";
     public customer_id!: string;
     public call_agent_id!: number;
     public assigned_sales_id!: number | null;
@@ -70,7 +70,7 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
             },
             status: {
-                type: DataTypes.ENUM("NEW", "ONGOING", "COMPLETED"),
+                type: DataTypes.ENUM("NEW", "ONGOING", "WON", "LOST"),
                 allowNull: false,
                 defaultValue: "NEW",
             },
