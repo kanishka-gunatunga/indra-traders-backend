@@ -1,11 +1,13 @@
 {
   "compilerOptions": {
     "target": "es6",
-    "module": "CommonJS",
+//    "module": "CommonJS",
     "rootDir": "src",
     "outDir": "dist",
     "esModuleInterop": true,
     "strict": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "NodeNext",
+    "module": "NodeNext"
   }
 }
