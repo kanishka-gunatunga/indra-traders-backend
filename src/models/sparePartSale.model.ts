@@ -10,6 +10,7 @@ export interface SparePartSaleAttributes {
     customer_id: string;
     call_agent_id: number;
     assigned_sales_id?: number | null;
+    current_level: 1 | 2 | 3;
     vehicle_make?: string | null;
     vehicle_model?: string | null;
     part_no?: string | null;
@@ -20,7 +21,7 @@ export interface SparePartSaleAttributes {
     updatedAt?: Date;
 }
 
-export type SparePartSaleCreationAttributes = Optional<SparePartSaleAttributes, "id" | "status" | "assigned_sales_id" | "ticket_number" | "priority">;
+export type SparePartSaleCreationAttributes = Optional<SparePartSaleAttributes, "id" | "status" | "assigned_sales_id" | "ticket_number" | "priority" | "current_level">;
 
 class SparePartSale extends Model<SparePartSaleAttributes, SparePartSaleCreationAttributes> implements SparePartSaleAttributes {
     public id!: number;
@@ -30,6 +31,7 @@ class SparePartSale extends Model<SparePartSaleAttributes, SparePartSaleCreation
     public customer_id!: string;
     public call_agent_id!: number;
     public assigned_sales_id!: number | null;
+    public current_level!: 1 | 2 | 3;
     public vehicle_make!: string | null;
     public vehicle_model!: string | null;
     public part_no!: string | null;
@@ -74,6 +76,12 @@ export default (sequelize: Sequelize) => {
             assigned_sales_id: {
                 type: DataTypes.INTEGER.UNSIGNED,
                 allowNull: true
+            },
+            current_level: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                defaultValue: 1,
+                validate: { isIn: [[1, 2, 3]] }
             },
             vehicle_make: {
                 type: DataTypes.STRING(100),

@@ -3,7 +3,15 @@ import db from "../models";
 import http from "http-status-codes";
 import {Op} from "sequelize";
 
-const {User, VehicleSale, Customer, VehicleSaleReminder, VehicleSaleFollowup} = db;
+const {User, VehicleSale, Customer, VehicleSaleReminder, VehicleSaleFollowup, VehicleSaleHistory} = db;
+
+const getLevelFromRole = (role: string): number => {
+    if (role === "SALES01") return 1;
+    if (role === "SALES02") return 2;
+    if (role === "SALES03") return 3;
+    return 0;
+};
+
 
 export const createVehicleSale = async (req: Request, res: Response) => {
     try {
@@ -76,53 +84,133 @@ export const createVehicleSale = async (req: Request, res: Response) => {
 //     }
 // };
 
+// export const getVehicleSales = async (req: Request, res: Response) => {
+//     try {
+//         const userId = (req as any).user?.id || req.query.userId;
+//
+//         const statusParam = req.query.status;
+//
+//         const status =
+//             typeof statusParam === "string" ? statusParam.toUpperCase() : undefined;
+//
+//         let whereClause: any = {};
+//
+//         // const whereClause = status
+//         //     ? {status}
+//         //     : undefined;
+//
+//         if (status) {
+//             if (status === "NEW") {
+//                 whereClause = { status: "NEW" };
+//             } else {
+//                 if (!userId) {
+//                     return res.status(http.UNAUTHORIZED).json({message:"User ID required for this status"});
+//                 }
+//
+//                 whereClause = {
+//                     status: status,
+//                     assigned_sales_id: userId
+//                 };
+//             }
+//         } else {
+//             if (userId) {
+//                 whereClause = {
+//                     [Op.or]: [
+//                         { status: "NEW" },
+//                         { assigned_sales_id: userId }
+//                     ]
+//                 };
+//             } else {
+//                 whereClause = { status: "NEW" };
+//             }
+//         }
+//
+//         const sales = await VehicleSale.findAll({
+//             where: whereClause,
+//             include: [
+//                 {model: Customer, as: "customer"},
+//                 {model: User, as: "callAgent"},
+//                 {model: User, as: "salesUser"},
+//             ],
+//             order: [["createdAt", "DESC"]],
+//         });
+//
+//         res.status(http.OK).json(sales);
+//     } catch (error) {
+//         console.error("Error fetching vehicle sales:", error);
+//         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+//     }
+// };
+
+
 export const getVehicleSales = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user?.id || req.query.userId;
+        const userId = (req as any).user?.id || Number(req.query.userId);
+        const userRole = (req as any).user?.user_role || req.query.userRole;
 
+        const userLevel = getLevelFromRole(userRole);
+
+        // 2. Parse Status Query
         const statusParam = req.query.status;
-
-        const status =
-            typeof statusParam === "string" ? statusParam.toUpperCase() : undefined;
+        const status = typeof statusParam === "string" ? statusParam.toUpperCase() : undefined;
 
         let whereClause: any = {};
 
-        // const whereClause = status
-        //     ? {status}
-        //     : undefined;
+        // --- ADMIN VIEW (See All) ---
+        if (userRole === "ADMIN") {
+            if (status) whereClause.status = status;
+        }
 
-        if (status) {
-            if (status === "NEW") {
-                whereClause = { status: "NEW" };
-            } else {
-                if (!userId) {
-                    return res.status(http.UNAUTHORIZED).json({message:"User ID required for this status"});
+        // --- SALES AGENT VIEW (Strict Isolation) ---
+        else if (userLevel > 0) {
+
+            // RULE 1: Level Isolation
+            // An agent can ONLY see leads sitting at their specific level.
+            whereClause.current_level = userLevel;
+
+            // RULE 2 & 3: Pool vs Assignment
+            if (status) {
+                // Case A: Filtering by specific status tab (e.g., clicking "Ongoing" tab)
+                if (status === "NEW") {
+                    // Shared Pool: See ALL 'NEW' leads at this level
+                    whereClause.status = "NEW";
+                } else {
+                    // Private Assignment: See 'ONGOING/WON/LOST' ONLY if assigned to me
+                    whereClause.status = status;
+                    whereClause.assigned_sales_id = userId;
                 }
-
-                whereClause = {
-                    status: status,
-                    assigned_sales_id: userId
-                };
-            }
-        } else {
-            if (userId) {
-                whereClause = {
-                    [Op.or]: [
-                        { status: "NEW" },
-                        { assigned_sales_id: userId }
-                    ]
-                };
             } else {
-                whereClause = { status: "NEW" };
+                // Case B: Dashboard / Kanban View (No status filter passed)
+                // Show: (Any 'NEW' lead at this level) OR (Any lead at this level assigned to me)
+                whereClause[Op.and] = [
+                    { current_level: userLevel }, // Re-enforce level check
+                    {
+                        [Op.or]: [
+                            { status: "NEW" },
+                            {
+                                [Op.and]: [
+                                    { status: { [Op.ne]: "NEW" } }, // Status is NOT 'NEW'
+                                    { assigned_sales_id: userId }    // AND assigned to user
+                                ]
+                            }
+                        ]
+                    }
+                ];
             }
+        }
+
+        // --- CALL AGENT / FALLBACK ---
+        else {
+            // Only see what they created (optional, adjust as needed)
+            // whereClause.call_agent_id = userId;
         }
 
         const sales = await VehicleSale.findAll({
             where: whereClause,
             include: [
-                {model: Customer, as: "customer"},
-                {model: User, as: "callAgent"},
-                {model: User, as: "salesUser"},
+                { model: Customer, as: "customer" },
+                { model: User, as: "salesUser" }, // Assigned User
+                { model: User, as: "callAgent" }, // Creator
             ],
             order: [["createdAt", "DESC"]],
         });
@@ -133,6 +221,68 @@ export const getVehicleSales = async (req: Request, res: Response) => {
         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
     }
 };
+
+
+export const promoteToNextLevel = async (req: Request, res: Response) => {
+    const t = await db.sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const userId = (req as any).user?.id || req.body.userId;
+
+        const sale = await VehicleSale.findByPk(id);
+        if (!sale) {
+            await t.rollback();
+            return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
+        }
+
+        const currentLevel = sale.current_level;
+        const nextLevel = (currentLevel + 1) as 1 | 2 | 3;
+
+        if (nextLevel > 3) {
+            await t.rollback();
+            return res.status(http.BAD_REQUEST).json({ message: "Already at maximum sales level" });
+        }
+
+        sale.status = "NEW";
+        sale.current_level = nextLevel;
+        sale.assigned_sales_id = null;
+        await sale.save({ transaction: t });
+
+        await VehicleSaleHistory.create({
+            vehicle_sale_id: sale.id,
+            action_by: userId,
+            action_type: "PROMOTED_LEVEL",
+            previous_level: currentLevel,
+            new_level: nextLevel,
+            details: `Lead escalated from Level ${currentLevel} to Level ${nextLevel}`,
+            timestamp: new Date()
+        } as any, { transaction: t });
+
+        await t.commit();
+        res.status(http.OK).json({ message: `Lead promoted to Sales Level ${nextLevel}`, sale });
+
+    } catch (error) {
+        await t.rollback();
+        console.error("Error promoting sale:", error);
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
+    }
+};
+
+export const getSaleHistory = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const history = await VehicleSaleHistory.findAll({
+            where: { vehicle_sale_id: id },
+            order: [["timestamp", "DESC"]],
+            include: [{ model: User, as: "actor", attributes: ['full_name', 'user_role'] }]
+        });
+        res.status(http.OK).json(history);
+    } catch (error) {
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching history" });
+    }
+};
+
+
 
 export const getSaleByTicketID = async (req: Request, res: Response) => {
     try {

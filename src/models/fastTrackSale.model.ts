@@ -116,6 +116,7 @@ export interface FastTrackSaleAttrs {
     direct_request_id: number;
     call_agent_id: number;
     assigned_sales_id?: number | null;
+    current_level: 1 | 2 | 3;
     status: FastTrackSaleStatus;
     price_range_min: number;
     price_range_max: number;
@@ -127,7 +128,7 @@ export interface FastTrackSaleAttrs {
 
 export type FastTrackSaleCreate = Optional<
     FastTrackSaleAttrs,
-    "id" | "ticket_number" | "assigned_sales_id" | "status" | "additional_note" | "priority"
+    "id" | "ticket_number" | "assigned_sales_id" | "status" | "additional_note" | "priority" | "current_level"
 >;
 
 export class FastTrackSale
@@ -140,6 +141,7 @@ export class FastTrackSale
     direct_request_id!: number;
     call_agent_id!: number;
     assigned_sales_id!: number | null;
+    public current_level!: 1 | 2 | 3;
     status!: FastTrackSaleStatus;
     price_range_min!: number;
     price_range_max!: number;
@@ -159,6 +161,12 @@ export default (sequelize: Sequelize) => {
             direct_request_id: {type: DataTypes.INTEGER.UNSIGNED, allowNull: false},
             call_agent_id: {type: DataTypes.INTEGER.UNSIGNED, allowNull: false},
             assigned_sales_id: {type: DataTypes.INTEGER.UNSIGNED, allowNull: true},
+            current_level: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                defaultValue: 1,
+                validate: { isIn: [[1, 2, 3]] }
+            },
             status: {
                 type: DataTypes.ENUM("NEW", "ONGOING", "WON", "LOST"),
                 allowNull: false,

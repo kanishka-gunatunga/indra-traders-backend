@@ -33,7 +33,11 @@ import UnavailableSparePartModel from "./unavailableSparePart.model";
 import UnavailableVehicleSaleModel from "./unavailableVehicleSale.model";
 import ChatSessionModel from "./chatSession.model";
 import ChatMessageModel from "./chatMessage.model";
-import OtpModel from "./otp.model"
+import OtpModel from "./otp.model";
+import VehicleSaleHistoryModel from "./vehicleSaleHistory.model";
+import SparePartSaleHistoryModel from "./sparePartSaleHistory.model";
+import ServiceParkSaleHistoryModel from "./serviceParkSaleHistory.model";
+import FastTrackSaleHistoryModel from "./fastTrackSaleHistory.model";
 
 const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
     host: dbConfig.HOST,
@@ -82,6 +86,10 @@ const UnavailableVehicleSale = UnavailableVehicleSaleModel(sequelize);
 const ChatSession = ChatSessionModel(sequelize);
 const ChatMessage = ChatMessageModel(sequelize);
 const Otp = OtpModel(sequelize);
+const VehicleSaleHistory = VehicleSaleHistoryModel(sequelize);
+const SparePartSaleHistory = SparePartSaleHistoryModel(sequelize);
+const ServiceParkSaleHistory = ServiceParkSaleHistoryModel(sequelize);
+const FastTrackSaleHistory = FastTrackSaleHistoryModel(sequelize);
 
 interface DB {
     Sequelize: typeof Sequelize;
@@ -119,6 +127,10 @@ interface DB {
     ChatMessage: typeof ChatMessage;
     ChatSession: typeof ChatSession;
     Otp: typeof Otp;
+    VehicleSaleHistory: typeof VehicleSaleHistory;
+    SparePartSaleHistory: typeof SparePartSaleHistory;
+    ServiceParkSaleHistory: typeof ServiceParkSaleHistory;
+    FastTrackSaleHistory: typeof FastTrackSaleHistory;
 }
 
 
@@ -138,6 +150,7 @@ db.User = User;
 // vehicle sale
 db.VehicleSaleFollowup = VehicleSaleFollowup;
 db.VehicleSaleReminder = VehicleSaleReminder;
+db.VehicleSaleHistory = VehicleSaleHistory;
 
 // spare part sale
 db.SparePart = SparePart;
@@ -148,6 +161,7 @@ db.SparePartSaleFollowup = SparePartSaleFollowup;
 db.SparePartSaleReminder = SparePartSaleReminder;
 db.SpareInvoice = SpareInvoice;
 db.SpareInvoiceItem = SpareInvoiceItem;
+db.SparePartSaleHistory = SparePartSaleHistory;
 
 
 // fast track
@@ -157,12 +171,14 @@ db.FastTrackSale = FastTrackSale;
 db.FastTrackBestMatch = FastTrackBestMatch;
 db.FastTrackReminder = FastTrackReminder;
 db.FastTrackFollowup = FastTrackFollowUp;
+db.FastTrackSaleHistory = FastTrackSaleHistory;
 
 // service park
 db.ServiceParkVehicleHistory = ServiceParkVehicleHistory;
 db.ServiceParkSale = ServiceParkSale;
 db.ServiceParkSaleFollowUp = ServiceParkSaleFollowUp;
 db.ServiceParkSaleReminder = ServiceParkSaleReminder;
+db.ServiceParkSaleHistory = ServiceParkSaleHistory;
 
 
 // unavailable
@@ -201,6 +217,22 @@ db.VehicleSaleFollowup.belongsTo(db.VehicleSale, {foreignKey: "vehicleSaleId", a
 db.VehicleSale.hasMany(db.VehicleSaleReminder, {foreignKey: "vehicleSaleId", as: "reminders"});
 db.VehicleSaleReminder.belongsTo(db.VehicleSale, {foreignKey: "vehicleSaleId", as: "vehicleSale"});
 
+db.VehicleSale.hasMany(db.VehicleSaleHistory, {
+    foreignKey: "vehicle_sale_id",
+    as: "history",
+    onDelete: "CASCADE",
+});
+
+db.VehicleSaleHistory.belongsTo(db.VehicleSale, {
+    foreignKey: "vehicle_sale_id",
+    as: "sale",
+});
+
+db.VehicleSaleHistory.belongsTo(db.User, {
+    foreignKey: "action_by",
+    as: "actor",
+});
+
 
 // spare parts
 
@@ -221,6 +253,22 @@ db.SparePartSaleReminder.belongsTo(db.SparePartSale, {foreignKey: "spare_part_sa
 
 db.SpareInvoice.hasMany(db.SpareInvoiceItem, {foreignKey: "invoice_id", as: "items"});
 db.SpareInvoiceItem.belongsTo(db.SpareInvoice, {foreignKey: "invoice_id", as: "invoice"});
+
+db.SparePartSale.hasMany(db.SparePartSaleHistory, {
+    foreignKey: "spare_part_sale_id",
+    as: "history",
+    onDelete: "CASCADE",
+});
+
+db.SparePartSaleHistory.belongsTo(db.SparePartSale, {
+    foreignKey: "spare_part_sale_id",
+    as: "sale",
+});
+
+db.SparePartSaleHistory.belongsTo(db.User, {
+    foreignKey: "action_by",
+    as: "actor",
+});
 
 
 // fast track
@@ -336,6 +384,22 @@ db.FastTrackReminder.belongsTo(db.FastTrackSale, {foreignKey: "sale_id", as: "sa
 db.FastTrackRequest.hasMany(db.FastTrackReminder, {foreignKey: "direct_request_id", as: "directReminders"});
 db.FastTrackReminder.belongsTo(db.FastTrackRequest, {foreignKey: "direct_request_id", as: "directRequest"});
 
+db.FastTrackSale.hasMany(db.FastTrackSaleHistory, {
+    foreignKey: "fast_track_sale_id",
+    as: "history",
+    onDelete: "CASCADE",
+});
+
+db.FastTrackSaleHistory.belongsTo(db.FastTrackSale, {
+    foreignKey: "fast_track_sale_id",
+    as: "sale",
+});
+
+db.FastTrackSaleHistory.belongsTo(db.User, {
+    foreignKey: "action_by",
+    as: "actor",
+});
+
 
 // service park
 
@@ -359,6 +423,26 @@ db.ServiceParkSaleFollowUp.belongsTo(db.ServiceParkSale, {foreignKey: "service_p
 
 db.ServiceParkSale.hasMany(db.ServiceParkSaleReminder, {foreignKey: "service_park_sale_id", as: "reminders"});
 db.ServiceParkSaleReminder.belongsTo(db.ServiceParkSale, {foreignKey: "service_park_sale_id", as: "sale"});
+
+
+db.ServiceParkSale.hasMany(db.ServiceParkSaleHistory, {
+    foreignKey: "service_park_sale_id",
+    as: "history",
+    onDelete: "CASCADE",
+});
+
+db.ServiceParkSaleHistory.belongsTo(db.ServiceParkSale, {
+    foreignKey: "service_park_sale_id",
+    as: "sale",
+});
+
+db.ServiceParkSaleHistory.belongsTo(db.User, {
+    foreignKey: "action_by",
+    as: "actor",
+});
+
+
+// unavailable items
 
 
 db.User.hasMany(db.UnavailableVehicleSale, {foreignKey: "call_agent_id", as: "unavailableVehicleCalls"});

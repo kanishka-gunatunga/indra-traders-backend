@@ -46,7 +46,7 @@
 //
 // export default router;
 
-import { Router } from "express";
+import {Router} from "express";
 import * as FT from "../controllers/fastTrack.controller";
 
 const r = Router();
@@ -80,5 +80,8 @@ r.get("/sales/:saleId/reminders", FT.getSaleReminders);
 
 r.get("/direct-requests/reminders", FT.getAllDirectReminders); // NEW: All reminders
 r.get("/direct-requests/:directRequestId/best-matches", FT.getBestMatches);
+
+r.get("/sales/:id/history", FT.getSaleHistory);
+r.put("/sales/:id/promote", FT.promoteToNextLevel);
 
 export default r;

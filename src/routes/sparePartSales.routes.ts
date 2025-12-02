@@ -7,7 +7,7 @@ import {
     assignToMe,
     createFollowup,
     createReminder, getFollowupsByTicket, getRemindersByTicket, updateSaleStatus, getNearestRemindersBySalesUser,
-    updatePriority
+    updatePriority, getSaleHistory, promoteToNextLevel
 } from "../controllers/sparePartSales.controller";
 
 const router = Router();
@@ -26,5 +26,8 @@ router.get("/:ticket/reminders", getRemindersByTicket);
 router.get("/sales-user/:userId/reminders/nearest", getNearestRemindersBySalesUser);
 
 router.put("/priority/:id", updatePriority);
+
+router.get("/:id/history", getSaleHistory);
+router.put("/:id/promote", promoteToNextLevel);
 
 export default router;

@@ -3,7 +3,12 @@ import {
     createVehicleSale,
     getVehicleSales,
     assignVehicleSale,
-    updateSaleStatus, deleteVehicleSale, getSaleByTicketID, getVehicleSalesByStatus, getNearestRemindersBySalesUser, updatePriority
+    updateSaleStatus,
+    deleteVehicleSale,
+    getSaleByTicketID,
+    getVehicleSalesByStatus,
+    getNearestRemindersBySalesUser,
+    updatePriority, getSaleHistory, promoteToNextLevel
 } from "../controllers/vehicleSale.controller";
 
 const router = Router();
@@ -19,5 +24,8 @@ router.delete("/:id", deleteVehicleSale);
 router.get("/sales-user/:userId/reminders/nearest", getNearestRemindersBySalesUser);
 
 router.put("/priority/:id", updatePriority);
+
+router.get("/:id/history", getSaleHistory);
+router.put("/:id/promote", promoteToNextLevel);
 
 export default router;

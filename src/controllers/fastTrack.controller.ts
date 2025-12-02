@@ -572,6 +572,7 @@ const {
     FastTrackSale,
     FastTrackFollowup,
     FastTrackReminder,
+    FastTrackSaleHistory
 } = db;
 
 
@@ -914,6 +915,68 @@ export const listSales = async (req: Request, res: Response) => {
         return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
     }
 };
+
+
+export const promoteToNextLevel = async (req: Request, res: Response) => {
+    const t = await db.sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const userId = (req as any).user?.id || req.body.userId;
+
+        const sale = await FastTrackSale.findByPk(id);
+        if (!sale) {
+            await t.rollback();
+            return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
+        }
+
+        const currentLevel = sale.current_level;
+        const nextLevel = (currentLevel + 1) as 1 | 2 | 3;
+
+        if (nextLevel > 3) {
+            await t.rollback();
+            return res.status(http.BAD_REQUEST).json({ message: "Already at maximum sales level" });
+        }
+
+        sale.status = "NEW";
+        sale.current_level = nextLevel;
+        sale.assigned_sales_id = null;
+        await sale.save({ transaction: t });
+
+        await FastTrackSaleHistory.create({
+            fast_track_sale_id: sale.id,
+            action_by: userId,
+            action_type: "PROMOTED_LEVEL",
+            previous_level: currentLevel,
+            new_level: nextLevel,
+            details: `Lead escalated from Level ${currentLevel} to Level ${nextLevel}`,
+            timestamp: new Date()
+        } as any, { transaction: t });
+
+        await t.commit();
+        res.status(http.OK).json({ message: `Lead promoted to Sales Level ${nextLevel}`, sale });
+
+    } catch (error) {
+        await t.rollback();
+        console.error("Error promoting sale:", error);
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
+    }
+};
+
+export const getSaleHistory = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const history = await FastTrackSaleHistory.findAll({
+            where: { fast_track_sale_id: id },
+            order: [["timestamp", "DESC"]],
+            include: [{ model: User, as: "actor", attributes: ['full_name', 'user_role'] }]
+        });
+        res.status(http.OK).json(history);
+    } catch (error) {
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching history" });
+    }
+};
+
+
 
 export const getDirectReminders = async (req: Request, res: Response) => {
     try {

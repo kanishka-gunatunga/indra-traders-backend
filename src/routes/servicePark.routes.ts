@@ -5,7 +5,7 @@ import {
     getSaleDetails, handleServiceIntake, listVehicleHistories, getVehicleHistoryByNumber,
     listServiceParkSales, getSaleDetailsByTicket, updateSaleStatus, createFollowup, createReminder,
     getNearestRemindersBySalesUser,
-    updatePriority
+    updatePriority, getSaleHistory, promoteToNextLevel
 } from "../controllers/servicePark.controller";
 
 const router = Router();
@@ -25,5 +25,8 @@ router.get("/:vehicleNo", getVehicleHistoryByNumber);
 router.get("/sales-user/:userId/reminders/nearest", getNearestRemindersBySalesUser);
 
 router.put("/priority/:id", updatePriority);
+
+router.get("/:id/history", getSaleHistory);
+router.put("/:id/promote", promoteToNextLevel);
 
 export default router;
