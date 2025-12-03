@@ -9,42 +9,151 @@ const getLevelFromRole = (role: string): number => {
     if (role === "SALES01") return 1;
     if (role === "SALES02") return 2;
     if (role === "SALES03") return 3;
-    return 0;
+    return 1;
 };
 
+
+// export const createVehicleSale = async (req: Request, res: Response) => {
+//     try {
+//         const {
+//             date,
+//             customer_id,
+//             call_agent_id,
+//             vehicle_make,
+//             vehicle_model,
+//             manufacture_year,
+//             transmission,
+//             fuel_type,
+//             down_payment,
+//             price_from,
+//             price_to,
+//             additional_note,
+//         } = req.body;
+//
+//         const newSale = await VehicleSale.create({
+//             ticket_number: `ITPL${Date.now()}`,
+//             date,
+//             customer_id,
+//             call_agent_id,
+//             vehicle_make,
+//             vehicle_model,
+//             manufacture_year,
+//             transmission,
+//             fuel_type,
+//             down_payment,
+//             price_from,
+//             price_to,
+//             additional_note,
+//         });
+//
+//         res.status(http.CREATED).json({
+//             message: "Vehicle sale created successfully",
+//             sale: newSale,
+//         });
+//     } catch (error) {
+//         console.error("Error creating vehicle sale:", error);
+//         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+//     }
+// };
 
 export const createVehicleSale = async (req: Request, res: Response) => {
     try {
         const {
             date,
-            customer_id,
-            call_agent_id,
+            customer_name,
+            contact_number,
+            email,
+            city,
+
             vehicle_make,
             vehicle_model,
+            vehicle_type,
+            remark,
+
+            is_self_assigned,
+            sales_user_id,
+            call_agent_id,
+
+            lead_source,
+            additional_note,
+            priority,
+
             manufacture_year,
             transmission,
             fuel_type,
             down_payment,
             price_from,
             price_to,
-            additional_note,
         } = req.body;
+
+        let customerRecord = await Customer.findOne({where: {phone_number: contact_number}});
+
+        if (!customerRecord) {
+            customerRecord = await Customer.create({
+                id: `CUS${Date.now()}`,
+                customer_name,
+                phone_number: contact_number,
+                email,
+                city,
+                lead_source: lead_source || "Direct Walk-in"
+            } as any);
+        }
+
+        let assignedId: number | null = null;
+        let status: "NEW" | "ONGOING" = "NEW";
+        let currentLevel: 1 | 2 | 3 = 1;
+
+        if (is_self_assigned && sales_user_id) {
+            assignedId = Number(sales_user_id);
+            status = "ONGOING";
+
+            const salesUser = await User.findByPk(sales_user_id);
+            if (salesUser) {
+                currentLevel = getLevelFromRole(salesUser.user_role) as 1 | 2 | 3;
+            }
+        }
+
+        const safeManufactureYear = manufacture_year ? Number(manufacture_year) : new Date().getFullYear();
+        const safeTransmission = transmission || "AUTO";
+        const safeFuelType = fuel_type || "PETROL";
+        const safeDownPayment = down_payment ? Number(down_payment) : 0;
+        const safePriceFrom = price_from ? Number(price_from) : 0;
+        const safePriceTo = price_to ? Number(price_to) : 0;
+
+        const finalNote = additional_note || (remark ? `Remark: ${remark} | Source: ${lead_source} | Type: ${vehicle_type}` : null);
 
         const newSale = await VehicleSale.create({
             ticket_number: `ITPL${Date.now()}`,
-            date,
-            customer_id,
-            call_agent_id,
+            date: date || new Date(),
+            status: status,
+            customer_id: customerRecord.id,
+
+            call_agent_id: call_agent_id || (assignedId ? assignedId : 1),
+            assigned_sales_id: assignedId,
+            current_level: currentLevel as 1 | 2 | 3,
             vehicle_make,
             vehicle_model,
-            manufacture_year,
-            transmission,
-            fuel_type,
-            down_payment,
-            price_from,
-            price_to,
-            additional_note,
+            manufacture_year: safeManufactureYear,
+            transmission: safeTransmission,
+            fuel_type: safeFuelType,
+            down_payment: safeDownPayment,
+            price_from: safePriceFrom,
+            price_to: safePriceTo,
+            additional_note: finalNote,
+            priority: priority || 0
         });
+
+        if (assignedId) {
+            await VehicleSaleHistory.create({
+                vehicle_sale_id: newSale.id,
+                action_by: assignedId,
+                action_type: "CREATED_AND_SELF_ASSIGNED",
+                previous_level: 0,
+                new_level: currentLevel,
+                details: `Lead created and self-assigned by Sales Agent`,
+                timestamp: new Date()
+            } as any);
+        }
 
         res.status(http.CREATED).json({
             message: "Vehicle sale created successfully",
@@ -183,14 +292,14 @@ export const getVehicleSales = async (req: Request, res: Response) => {
                 // Case B: Dashboard / Kanban View (No status filter passed)
                 // Show: (Any 'NEW' lead at this level) OR (Any lead at this level assigned to me)
                 whereClause[Op.and] = [
-                    { current_level: userLevel }, // Re-enforce level check
+                    {current_level: userLevel}, // Re-enforce level check
                     {
                         [Op.or]: [
-                            { status: "NEW" },
+                            {status: "NEW"},
                             {
                                 [Op.and]: [
-                                    { status: { [Op.ne]: "NEW" } }, // Status is NOT 'NEW'
-                                    { assigned_sales_id: userId }    // AND assigned to user
+                                    {status: {[Op.ne]: "NEW"}}, // Status is NOT 'NEW'
+                                    {assigned_sales_id: userId}    // AND assigned to user
                                 ]
                             }
                         ]
@@ -208,9 +317,9 @@ export const getVehicleSales = async (req: Request, res: Response) => {
         const sales = await VehicleSale.findAll({
             where: whereClause,
             include: [
-                { model: Customer, as: "customer" },
-                { model: User, as: "salesUser" }, // Assigned User
-                { model: User, as: "callAgent" }, // Creator
+                {model: Customer, as: "customer"},
+                {model: User, as: "salesUser"}, // Assigned User
+                {model: User, as: "callAgent"}, // Creator
             ],
             order: [["createdAt", "DESC"]],
         });
@@ -226,13 +335,13 @@ export const getVehicleSales = async (req: Request, res: Response) => {
 export const promoteToNextLevel = async (req: Request, res: Response) => {
     const t = await db.sequelize.transaction();
     try {
-        const { id } = req.params;
+        const {id} = req.params;
         const userId = (req as any).user?.id || req.body.userId;
 
         const sale = await VehicleSale.findByPk(id);
         if (!sale) {
             await t.rollback();
-            return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
+            return res.status(http.NOT_FOUND).json({message: "Sale not found"});
         }
 
         const currentLevel = sale.current_level;
@@ -240,13 +349,13 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
 
         if (nextLevel > 3) {
             await t.rollback();
-            return res.status(http.BAD_REQUEST).json({ message: "Already at maximum sales level" });
+            return res.status(http.BAD_REQUEST).json({message: "Already at maximum sales level"});
         }
 
         sale.status = "NEW";
         sale.current_level = nextLevel;
         sale.assigned_sales_id = null;
-        await sale.save({ transaction: t });
+        await sale.save({transaction: t});
 
         await VehicleSaleHistory.create({
             vehicle_sale_id: sale.id,
@@ -256,32 +365,31 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
             new_level: nextLevel,
             details: `Lead escalated from Level ${currentLevel} to Level ${nextLevel}`,
             timestamp: new Date()
-        } as any, { transaction: t });
+        } as any, {transaction: t});
 
         await t.commit();
-        res.status(http.OK).json({ message: `Lead promoted to Sales Level ${nextLevel}`, sale });
+        res.status(http.OK).json({message: `Lead promoted to Sales Level ${nextLevel}`, sale});
 
     } catch (error) {
         await t.rollback();
         console.error("Error promoting sale:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
+        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
     }
 };
 
 export const getSaleHistory = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
+        const {id} = req.params;
         const history = await VehicleSaleHistory.findAll({
-            where: { vehicle_sale_id: id },
+            where: {vehicle_sale_id: id},
             order: [["timestamp", "DESC"]],
-            include: [{ model: User, as: "actor", attributes: ['full_name', 'user_role'] }]
+            include: [{model: User, as: "actor", attributes: ['full_name', 'user_role']}]
         });
         res.status(http.OK).json(history);
     } catch (error) {
-        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching history" });
+        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error fetching history"});
     }
 };
-
 
 
 export const getSaleByTicketID = async (req: Request, res: Response) => {
@@ -392,16 +500,16 @@ export const deleteVehicleSale = async (req: Request, res: Response) => {
 export const getVehicleSalesByStatus = async (req: Request, res: Response) => {
     try {
         const userId = (req as any).user?.id || req.query.userId;
-        const { status } = req.params;
+        const {status} = req.params;
         const statusUpper = status.toUpperCase();
 
         let whereClause: any = {};
 
         if (statusUpper === "NEW") {
-            whereClause = { status: "NEW" };
+            whereClause = {status: "NEW"};
         } else {
             if (!userId) {
-                return res.status(http.UNAUTHORIZED).json({ message: "User ID required" });
+                return res.status(http.UNAUTHORIZED).json({message: "User ID required"});
             }
             whereClause = {
                 status: statusUpper,
@@ -413,9 +521,9 @@ export const getVehicleSalesByStatus = async (req: Request, res: Response) => {
         const sales = await VehicleSale.findAll({
             where: whereClause,
             include: [
-                { model: Customer, as: "customer" },
-                { model: User, as: "callAgent" },
-                { model: User, as: "salesUser" },
+                {model: Customer, as: "customer"},
+                {model: User, as: "callAgent"},
+                {model: User, as: "salesUser"},
             ],
             order: [["createdAt", "DESC"]],
         });

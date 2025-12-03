@@ -576,6 +576,14 @@ const {
 } = db;
 
 
+const getLevelFromRole = (role: string): number => {
+    if (role === "SALES01") return 1;
+    if (role === "SALES02") return 2;
+    if (role === "SALES03") return 3;
+    return 0;
+};
+
+
 export const createDirectRequest = async (req: Request, res: Response) => {
     try {
         const payload = req.body;
@@ -750,15 +758,15 @@ export const claimSaleLead = async (req: Request, res: Response) => {
 export const updateSaleStatus = async (req: Request, res: Response) => {
     try {
         const saleId = Number(req.params.saleId);
-        const {status} = req.body as { status: "WON" | "LOST" };
+        const {status} = req.body as { status: "WON" | "LOST" | "ONGOING" };
 
-        if (!["WON", "LOST"].includes(status))
-            return res.status(http.BAD_REQUEST).json({message: "Invalid status"});
+        // if (!["WON", "LOST"].includes(status))
+        //     return res.status(http.BAD_REQUEST).json({message: "Invalid status"});
 
         const sale = await FastTrackSale.findByPk(saleId);
         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
-        if (sale.status !== "ONGOING")
-            return res.status(http.BAD_REQUEST).json({message: "Only ONGOING can be closed"});
+        // if (sale.status !== "ONGOING")
+        //     return res.status(http.BAD_REQUEST).json({message: "Only ONGOING can be closed"});
 
         sale.status = status;
         await sale.save();
@@ -863,44 +871,112 @@ export const getSaleByTicket = async (req: Request, res: Response) => {
 // };
 
 
+// export const listSales = async (req: Request, res: Response) => {
+//     try {
+//         const userId = (req as any).user?.id || req.query.userId;
+//         const { status, assigned_sales_id } = req.query;
+//         const statusStr = status ? String(status) : undefined;
+//
+//         let where: any = {};
+//
+//         if (assigned_sales_id) {
+//             where.assigned_sales_id = Number(assigned_sales_id);
+//         }
+//
+//         if (statusStr) {
+//             if (statusStr === "NEW") {
+//                 where.status = "NEW";
+//             } else {
+//                 if (!userId) {
+//                     return res.status(http.UNAUTHORIZED).json({ message: "User ID required" });
+//                 }
+//                 where.status = statusStr;
+//                 where.assigned_sales_id = userId;
+//             }
+//         } else {
+//             if (userId) {
+//                 where = {
+//                     ...where,
+//                     [Op.or]: [
+//                         { status: "NEW" },
+//                         { assigned_sales_id: userId }
+//                     ]
+//                 };
+//             } else {
+//                 where.status = "NEW";
+//             }
+//         }
+//
+//         const rows = await FastTrackSale.findAll({
+//             where,
+//             include: [
+//                 { model: Customer, as: "customer" },
+//                 { model: VehicleListing, as: "vehicle" },
+//                 { model: User, as: "salesUser", attributes: ["id", "full_name"] },
+//             ],
+//             order: [["createdAt", "DESC"]],
+//         });
+//
+//         return res.status(http.OK).json(rows);
+//     } catch (e) {
+//         console.error("listSales", e);
+//         return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+//     }
+// };
+
+
 export const listSales = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user?.id || req.query.userId;
-        const { status, assigned_sales_id } = req.query;
-        const statusStr = status ? String(status) : undefined;
+        const userId = (req as any).user?.id || Number(req.query.userId);
+        const userRole = (req as any).user?.user_role || req.query.userRole;
 
-        let where: any = {};
+        const userLevel = getLevelFromRole(userRole);
+
+        const statusParam = req.query.status;
+        const status = typeof statusParam === "string" ? statusParam.toUpperCase() : undefined;
+
+        const { assigned_sales_id } = req.query;
+
+        let whereClause: any = {};
 
         if (assigned_sales_id) {
-            where.assigned_sales_id = Number(assigned_sales_id);
+            whereClause.assigned_sales_id = Number(assigned_sales_id);
         }
 
-        if (statusStr) {
-            if (statusStr === "NEW") {
-                where.status = "NEW";
-            } else {
-                if (!userId) {
-                    return res.status(http.UNAUTHORIZED).json({ message: "User ID required" });
+        if (userRole === "ADMIN") {
+            if (status) whereClause.status = status;
+        }
+
+        else if (userLevel > 0) {
+            whereClause.current_level = userLevel;
+
+            if (status) {
+                if (status === "NEW") {
+                    whereClause.status = "NEW";
+                } else {
+                    whereClause.status = status;
+                    whereClause.assigned_sales_id = userId;
                 }
-                where.status = statusStr;
-                where.assigned_sales_id = userId;
-            }
-        } else {
-            if (userId) {
-                where = {
-                    ...where,
-                    [Op.or]: [
-                        { status: "NEW" },
-                        { assigned_sales_id: userId }
-                    ]
-                };
             } else {
-                where.status = "NEW";
+                whereClause[Op.and] = [
+                    { current_level: userLevel },
+                    {
+                        [Op.or]: [
+                            { status: "NEW" },
+                            {
+                                [Op.and]: [
+                                    { status: { [Op.ne]: "NEW" } },
+                                    { assigned_sales_id: userId }
+                                ]
+                            }
+                        ]
+                    }
+                ];
             }
         }
 
         const rows = await FastTrackSale.findAll({
-            where,
+            where: whereClause,
             include: [
                 { model: Customer, as: "customer" },
                 { model: VehicleListing, as: "vehicle" },

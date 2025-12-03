@@ -14,6 +14,14 @@ const {
 } = db;
 
 
+const getLevelFromRole = (role: string): number => {
+    if (role === "SALES01") return 1;
+    if (role === "SALES02") return 2;
+    if (role === "SALES03") return 3;
+    return 0;
+};
+
+
 export const handleCustomerAndVehicle = async (data: any) => {
     const {phone_number, customer_name, vehicle_no, ...rest} = data;
 
@@ -220,30 +228,104 @@ export const listVehicleHistories = async (req: Request, res: Response) => {
 // };
 
 
+// export const listServiceParkSales = async (req: Request, res: Response) => {
+//     try {
+//
+//         const userId = (req as any).user?.id || req.query.userId;
+//
+//         let whereClause: any = {};
+//
+//         if (userId) {
+//             whereClause = {
+//                 [Op.or]: [
+//                     { status: "NEW" },
+//                     { sales_user_id: userId }
+//                 ]
+//             };
+//         } else {
+//             whereClause = { status: "NEW" };
+//         }
+//
+//         const sales = await ServiceParkSale.findAll({
+//             where: whereClause,
+//             include: [
+//                 { model: Customer, as: "customer" },
+//                 { model: ServiceParkVehicleHistory, as: "vehicle" },
+//                 { model: User, as: "salesUser", attributes: ["id", "full_name", "email"] },
+//             ],
+//             order: [["createdAt", "DESC"]]
+//         });
+//
+//         return res.status(200).json({data: sales});
+//     } catch (error: any) {
+//         console.error(error);
+//         return res.status(500).json({message: "Internal server error", error: error.message});
+//     }
+// };
+
+
 export const listServiceParkSales = async (req: Request, res: Response) => {
     try {
+        const userId = (req as any).user?.id || Number(req.query.userId);
+        const userRole = (req as any).user?.user_role || req.query.userRole;
 
-        const userId = (req as any).user?.id || req.query.userId;
+        const userLevel = getLevelFromRole(userRole);
+
+        const statusParam = req.query.status;
+        const status = typeof statusParam === "string" ? statusParam.toUpperCase() : undefined;
+
 
         let whereClause: any = {};
 
-        if (userId) {
-            whereClause = {
-                [Op.or]: [
-                    { status: "NEW" },
-                    { sales_user_id: userId }
-                ]
-            };
-        } else {
-            whereClause = { status: "NEW" };
+        if (userRole === "ADMIN") {
+            if (status) whereClause.status = status;
+        } else if (userLevel > 0) {
+
+            whereClause.current_level = userLevel;
+
+            if (status) {
+
+                if (status === "NEW") {
+                    whereClause.status = "NEW";
+                } else {
+                    whereClause.status = status;
+                    whereClause.sales_user_id = userId;
+                }
+            } else {
+                whereClause[Op.and] = [
+                    {current_level: userLevel},
+                    {
+                        [Op.or]: [
+                            {status: "NEW"},
+                            {
+                                [Op.and]: [
+                                    {status: {[Op.ne]: "NEW"}},
+                                    {sales_user_id: userId}
+                                ]
+                            }
+                        ]
+                    }
+                ];
+            }
         }
+
+        // if (userId) {
+        //     whereClause = {
+        //         [Op.or]: [
+        //             { status: "NEW" },
+        //             { sales_user_id: userId }
+        //         ]
+        //     };
+        // } else {
+        //     whereClause = { status: "NEW" };
+        // }
 
         const sales = await ServiceParkSale.findAll({
             where: whereClause,
             include: [
-                { model: Customer, as: "customer" },
-                { model: ServiceParkVehicleHistory, as: "vehicle" },
-                { model: User, as: "salesUser", attributes: ["id", "full_name", "email"] },
+                {model: Customer, as: "customer"},
+                {model: ServiceParkVehicleHistory, as: "vehicle"},
+                {model: User, as: "salesUser", attributes: ["id", "full_name", "email"]},
             ],
             order: [["createdAt", "DESC"]]
         });
@@ -259,13 +341,13 @@ export const listServiceParkSales = async (req: Request, res: Response) => {
 export const promoteToNextLevel = async (req: Request, res: Response) => {
     const t = await db.sequelize.transaction();
     try {
-        const { id } = req.params;
+        const {id} = req.params;
         const userId = (req as any).user?.id || req.body.userId;
 
         const sale = await ServiceParkSale.findByPk(id);
         if (!sale) {
             await t.rollback();
-            return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
+            return res.status(http.NOT_FOUND).json({message: "Sale not found"});
         }
 
         const currentLevel = sale.current_level;
@@ -273,13 +355,13 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
 
         if (nextLevel > 3) {
             await t.rollback();
-            return res.status(http.BAD_REQUEST).json({ message: "Already at maximum sales level" });
+            return res.status(http.BAD_REQUEST).json({message: "Already at maximum sales level"});
         }
 
         sale.status = "NEW";
         sale.current_level = nextLevel;
         sale.sales_user_id = null;
-        await sale.save({ transaction: t });
+        await sale.save({transaction: t});
 
         await ServiceParkSaleHistory.create({
             service_park_sale_id: sale.id,
@@ -289,32 +371,31 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
             new_level: nextLevel,
             details: `Lead escalated from Level ${currentLevel} to Level ${nextLevel}`,
             timestamp: new Date()
-        } as any, { transaction: t });
+        } as any, {transaction: t});
 
         await t.commit();
-        res.status(http.OK).json({ message: `Lead promoted to Sales Level ${nextLevel}`, sale });
+        res.status(http.OK).json({message: `Lead promoted to Sales Level ${nextLevel}`, sale});
 
     } catch (error) {
         await t.rollback();
         console.error("Error promoting sale:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
+        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
     }
 };
 
 export const getSaleHistory = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
+        const {id} = req.params;
         const history = await ServiceParkSaleHistory.findAll({
-            where: { service_park_sale_id: id },
+            where: {service_park_sale_id: id},
             order: [["timestamp", "DESC"]],
-            include: [{ model: User, as: "actor", attributes: ['full_name', 'user_role'] }]
+            include: [{model: User, as: "actor", attributes: ['full_name', 'user_role']}]
         });
         res.status(http.OK).json(history);
     } catch (error) {
-        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching history" });
+        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error fetching history"});
     }
 };
-
 
 
 export const updateSaleStatus = async (req: Request, res: Response) => {
@@ -322,7 +403,7 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
         const {id} = req.params;
         const {status} = req.body;
 
-        if (!["WON", "LOST"].includes(status)) {
+        if (!["WON", "LOST", "ONGOING"].includes(status)) {
             return res.status(http.BAD_REQUEST).json({
                 message: "Invalid status. Only 'WON' or 'LOST' are allowed.",
             });
@@ -333,11 +414,11 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
             return res.status(http.NOT_FOUND).json({message: "Sale not found"});
         }
 
-        if (sale.status !== "ONGOING") {
-            return res.status(http.BAD_REQUEST).json({
-                message: `Cannot update status. Current status is '${sale.status}'. Only 'ONGOING' sales can be marked as 'WON' or 'LOST'.`,
-            });
-        }
+        // if (sale.status !== "ONGOING") {
+        //     return res.status(http.BAD_REQUEST).json({
+        //         message: `Cannot update status. Current status is '${sale.status}'. Only 'ONGOING' sales can be marked as 'WON' or 'LOST'.`,
+        //     });
+        // }
 
         sale.status = status;
         await sale.save();
