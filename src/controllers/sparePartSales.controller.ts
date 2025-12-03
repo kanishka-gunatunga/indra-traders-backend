@@ -9,41 +9,142 @@ const getLevelFromRole = (role: string): number => {
     if (role === "SALES01") return 1;
     if (role === "SALES02") return 2;
     if (role === "SALES03") return 3;
-    return 0;
+    return 1;
 };
+
+
+// export const createSale = async (req: Request, res: Response) => {
+//     try {
+//         const {
+//             date,
+//             customer_id,
+//             call_agent_id,
+//             vehicle_make,
+//             vehicle_model,
+//             part_no,
+//             year_of_manufacture,
+//             additional_note,
+//         } = req.body;
+//
+//         const sale = await SparePartSale.create({
+//             ticket_number: `IMS${Date.now()}`,
+//             date,
+//             customer_id,
+//             call_agent_id,
+//             vehicle_make,
+//             vehicle_model,
+//             part_no,
+//             year_of_manufacture,
+//             additional_note,
+//         });
+//
+//         res.status(http.CREATED).json({message: "Sale created", sale});
+//     } catch (err) {
+//         console.error("createSale error:", err);
+//         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+//     }
+// };
 
 
 export const createSale = async (req: Request, res: Response) => {
     try {
         const {
             date,
-            customer_id,
-            call_agent_id,
+            customer_name,
+            contact_number,
+            email,
+            city,
+
             vehicle_make,
             vehicle_model,
             part_no,
-            year_of_manufacture,
+
+            is_self_assigned,
+            sales_user_id,
+            call_agent_id,
+
+            lead_source,
             additional_note,
+            priority,
+
+            year_of_manufacture,
         } = req.body;
 
-        const sale = await SparePartSale.create({
+        let customerRecord = await Customer.findOne({where: {phone_number: contact_number}});
+
+        if (!customerRecord) {
+            customerRecord = await Customer.create({
+                id: `CUS${Date.now()}`,
+                customer_name,
+                phone_number: contact_number,
+                email,
+                city,
+                lead_source
+            })
+        }
+
+        let assignedId: number | null = null;
+        let status: "NEW" | "ONGOING" = "NEW";
+        let currentLevel: 1 | 2 | 3 = 1;
+
+        if (is_self_assigned && sales_user_id) {
+            assignedId = Number(sales_user_id);
+            status = "ONGOING";
+
+            const salesUser = await User.findByPk(sales_user_id);
+            if (salesUser) {
+                currentLevel = getLevelFromRole(salesUser.user_role) as 1 | 2 | 3;;
+            }
+        }
+
+        const newSale = await SparePartSale.create({
             ticket_number: `IMS${Date.now()}`,
-            date,
-            customer_id,
-            call_agent_id,
+            date: date || new Date(),
+            status: status as any,
+
+            customer_id: customerRecord.id,
+
+            // If self-assigned, call_agent is null or same as sales user?
+            // Usually null or a system ID if the model allows null.
+            call_agent_id: call_agent_id || (assignedId ? assignedId : 1),
+            assigned_sales_id: assignedId,
+            current_level: currentLevel as 1 | 2 | 3,
+
             vehicle_make,
             vehicle_model,
             part_no,
-            year_of_manufacture,
-            additional_note,
+            // Mapping fields that might not exist in your original model
+            // Ensure you update your Model if you want to save 'city', 'lead_source', 'vehicle_type'
+            // For now, storing them in additional_note or new columns
+            additional_note: additional_note || `Remark: ${req.body.remark} | Source: ${lead_source}`,
+
+            // Defaults for fields not in the simplified form but required by DB
+            year_of_manufacture: year_of_manufacture || new Date().getFullYear(),
+            priority: priority || 0
         });
 
-        res.status(http.CREATED).json({message: "Sale created", sale});
+        if (assignedId) {
+            await SparePartSaleHistory.create({
+                spare_part_sale_id: newSale.id,
+                action_by: assignedId,
+                action_type: "CREATED_AND_SELF_ASSIGNED",
+                previous_level: 0,
+                new_level: currentLevel,
+                details: `Lead created and self-assigned by Sales Agent`,
+                timestamp: new Date()
+            } as any);
+        }
+
+        res.status(http.CREATED).json({
+            message: "Lead created successfully",
+            sale: newSale,
+        });
     } catch (err) {
         console.error("createSale error:", err);
         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
     }
 };
+
 
 // export const listSales = async (req: Request, res: Response) => {
 //     try {
@@ -164,14 +265,14 @@ export const listSales = async (req: Request, res: Response) => {
                 // Case B: Dashboard / Kanban View (No status filter passed)
                 // Show: (Any 'NEW' lead at this level) OR (Any lead at this level assigned to me)
                 whereClause[Op.and] = [
-                    { current_level: userLevel }, // Re-enforce level check
+                    {current_level: userLevel}, // Re-enforce level check
                     {
                         [Op.or]: [
-                            { status: "NEW" },
+                            {status: "NEW"},
                             {
                                 [Op.and]: [
-                                    { status: { [Op.ne]: "NEW" } }, // Status is NOT 'NEW'
-                                    { assigned_sales_id: userId }    // AND assigned to user
+                                    {status: {[Op.ne]: "NEW"}}, // Status is NOT 'NEW'
+                                    {assigned_sales_id: userId}    // AND assigned to user
                                 ]
                             }
                         ]
@@ -189,9 +290,9 @@ export const listSales = async (req: Request, res: Response) => {
         const sales = await SparePartSale.findAll({
             where: whereClause,
             include: [
-                { model: Customer, as: "customer" },
-                { model: User, as: "salesUser" }, // Assigned User
-                { model: User, as: "callAgent" }, // Creator
+                {model: Customer, as: "customer"},
+                {model: User, as: "salesUser"}, // Assigned User
+                {model: User, as: "callAgent"}, // Creator
             ],
             order: [["createdAt", "DESC"]],
         });
