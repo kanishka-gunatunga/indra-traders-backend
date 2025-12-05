@@ -70,6 +70,16 @@ export const createSale = async (req: Request, res: Response) => {
             year_of_manufacture,
         } = req.body;
 
+        const creatorId = is_self_assigned ? sales_user_id : call_agent_id;
+
+        const creatorUser = await User.findByPk(creatorId);
+
+        if (!creatorUser) {
+            return res.status(http.BAD_REQUEST).json({message: "Creator user not found"});
+        }
+
+        const userBranch = creatorUser.branch;
+
         let customerRecord = await Customer.findOne({where: {phone_number: contact_number}});
 
         if (!customerRecord) {
@@ -93,7 +103,8 @@ export const createSale = async (req: Request, res: Response) => {
 
             const salesUser = await User.findByPk(sales_user_id);
             if (salesUser) {
-                currentLevel = getLevelFromRole(salesUser.user_role) as 1 | 2 | 3;;
+                currentLevel = getLevelFromRole(salesUser.user_role) as 1 | 2 | 3;
+                ;
             }
         }
 
@@ -103,6 +114,8 @@ export const createSale = async (req: Request, res: Response) => {
             status: status as any,
 
             customer_id: customerRecord.id,
+
+            branch: userBranch,
 
             // If self-assigned, call_agent is null or same as sales user?
             // Usually null or a system ID if the model allows null.
@@ -228,7 +241,15 @@ export const createSale = async (req: Request, res: Response) => {
 export const listSales = async (req: Request, res: Response) => {
     try {
         const userId = (req as any).user?.id || Number(req.query.userId);
+
+        const currentUser = await User.findByPk(userId);
+
+        if (!currentUser) {
+            return res.status(http.UNAUTHORIZED).json({message: "User not authenticated"});
+        }
+
         const userRole = (req as any).user?.user_role || req.query.userRole;
+        const userBranch = currentUser.branch;
 
         const userLevel = getLevelFromRole(userRole);
 
@@ -241,50 +262,52 @@ export const listSales = async (req: Request, res: Response) => {
         // --- ADMIN VIEW (See All) ---
         if (userRole === "ADMIN") {
             if (status) whereClause.status = status;
-        }
+        } else {
+            // --- SALES AGENT VIEW (Strict Isolation) ---
+            whereClause.branch = userBranch;
+            if (userLevel > 0) {
 
-        // --- SALES AGENT VIEW (Strict Isolation) ---
-        else if (userLevel > 0) {
+                // RULE 1: Level Isolation
+                // An agent can ONLY see leads sitting at their specific level.
+                whereClause.current_level = userLevel;
 
-            // RULE 1: Level Isolation
-            // An agent can ONLY see leads sitting at their specific level.
-            whereClause.current_level = userLevel;
-
-            // RULE 2 & 3: Pool vs Assignment
-            if (status) {
-                // Case A: Filtering by specific status tab (e.g., clicking "Ongoing" tab)
-                if (status === "NEW") {
-                    // Shared Pool: See ALL 'NEW' leads at this level
-                    whereClause.status = "NEW";
-                } else {
-                    // Private Assignment: See 'ONGOING/WON/LOST' ONLY if assigned to me
-                    whereClause.status = status;
-                    whereClause.assigned_sales_id = userId;
-                }
-            } else {
-                // Case B: Dashboard / Kanban View (No status filter passed)
-                // Show: (Any 'NEW' lead at this level) OR (Any lead at this level assigned to me)
-                whereClause[Op.and] = [
-                    {current_level: userLevel}, // Re-enforce level check
-                    {
-                        [Op.or]: [
-                            {status: "NEW"},
-                            {
-                                [Op.and]: [
-                                    {status: {[Op.ne]: "NEW"}}, // Status is NOT 'NEW'
-                                    {assigned_sales_id: userId}    // AND assigned to user
-                                ]
-                            }
-                        ]
+                // RULE 2 & 3: Pool vs Assignment
+                if (status) {
+                    // Case A: Filtering by specific status tab (e.g., clicking "Ongoing" tab)
+                    if (status === "NEW") {
+                        // Shared Pool: See ALL 'NEW' leads at this level
+                        whereClause.status = "NEW";
+                    } else {
+                        // Private Assignment: See 'ONGOING/WON/LOST' ONLY if assigned to me
+                        whereClause.status = status;
+                        whereClause.assigned_sales_id = userId;
                     }
-                ];
+                } else {
+                    // Case B: Dashboard / Kanban View (No status filter passed)
+                    // Show: (Any 'NEW' lead at this level) OR (Any lead at this level assigned to me)
+                    whereClause[Op.and] = [
+                        {current_level: userLevel},
+                        {branch: userBranch},// Re-enforce level check
+                        {
+                            [Op.or]: [
+                                {status: "NEW"},
+                                {
+                                    [Op.and]: [
+                                        {status: {[Op.ne]: "NEW"}}, // Status is NOT 'NEW'
+                                        {assigned_sales_id: userId}    // AND assigned to user
+                                    ]
+                                }
+                            ]
+                        }
+                    ];
+                }
             }
-        }
 
-        // --- CALL AGENT / FALLBACK ---
-        else {
-            // Only see what they created (optional, adjust as needed)
-            // whereClause.call_agent_id = userId;
+            // --- CALL AGENT / FALLBACK ---
+            else {
+                // Only see what they created (optional, adjust as needed)
+                // whereClause.call_agent_id = userId;
+            }
         }
 
         const sales = await SparePartSale.findAll({
@@ -374,8 +397,18 @@ export const getSaleByTicket = async (req: Request, res: Response) => {
                 {model: Customer, as: "customer"},
                 {model: User, as: "callAgent", attributes: ["id", "full_name"]},
                 {model: User, as: "salesUser", attributes: ["id", "full_name"]},
-                {model: SparePartSaleFollowup, as: "followups", order: [["activity_date", "DESC"]]},
-                {model: SparePartSaleReminder, as: "reminders", order: [["task_date", "ASC"]]}
+                {
+                    model: SparePartSaleFollowup, as: "followups", order: [["activity_date", "DESC"]],
+                    include: [
+                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                    ]
+                },
+                {
+                    model: SparePartSaleReminder, as: "reminders", order: [["task_date", "ASC"]],
+                    include: [
+                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                    ]
+                }
             ],
         });
         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
@@ -459,31 +492,78 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
 };
 
 
+// export const createFollowup = async (req: Request, res: Response) => {
+//     try {
+//         const {activity, activity_date, spare_part_sale_id} = req.body;
+//         const sale = await SparePartSale.findByPk(spare_part_sale_id);
+//         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+//
+//         const f = await SparePartSaleFollowup.create({activity, activity_date, spare_part_sale_id});
+//         res.status(http.CREATED).json({message: "Followup created", followup: f});
+//     } catch (err) {
+//         console.error("createFollowup error:", err);
+//         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+//     }
+// };
+
+
 export const createFollowup = async (req: Request, res: Response) => {
     try {
-        const {activity, activity_date, spare_part_sale_id} = req.body;
-        const sale = await SparePartSale.findByPk(spare_part_sale_id);
-        if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+        const {activity, activity_date, spare_part_sale_id, userId} = req.body;
 
-        const f = await SparePartSaleFollowup.create({activity, activity_date, spare_part_sale_id});
-        res.status(http.CREATED).json({message: "Followup created", followup: f});
-    } catch (err) {
-        console.error("createFollowup error:", err);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        const followup = await SparePartSaleFollowup.create({
+            activity,
+            activity_date,
+            spare_part_sale_id,
+            created_by: userId
+        });
+
+        const fullFollowup = await SparePartSaleFollowup.findByPk(followup.id, {
+            include: [{model: User, as: "creator", attributes: ["full_name"]}]
+        });
+
+        res.status(201).json({message: "Follow-up created", followup: fullFollowup});
+    } catch (error) {
+        console.error("Error creating follow-up:", error);
+        res.status(500).json({message: "Server error"});
     }
 };
 
+
+// export const createReminder = async (req: Request, res: Response) => {
+//     try {
+//         const {task_title, task_date, note, spare_part_sale_id} = req.body;
+//         const sale = await SparePartSale.findByPk(spare_part_sale_id);
+//         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+//
+//         const reminder = await SparePartSaleReminder.create({task_title, task_date, note, spare_part_sale_id});
+//         res.status(http.CREATED).json({message: "Reminder created", reminder: reminder});
+//     } catch (err) {
+//         console.error("createReminder error:", err);
+//         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+//     }
+// };
+
 export const createReminder = async (req: Request, res: Response) => {
     try {
-        const {task_title, task_date, note, spare_part_sale_id} = req.body;
-        const sale = await SparePartSale.findByPk(spare_part_sale_id);
-        if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+        const {task_title, task_date, note, spare_part_sale_id, userId} = req.body;
 
-        const reminder = await SparePartSaleReminder.create({task_title, task_date, note, spare_part_sale_id});
-        res.status(http.CREATED).json({message: "Reminder created", reminder: reminder});
-    } catch (err) {
-        console.error("createReminder error:", err);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        const followup = await SparePartSaleReminder.create({
+            task_title,
+            task_date,
+            note,
+            spare_part_sale_id,
+            created_by: userId
+        });
+
+        const fullFollowup = await SparePartSaleReminder.findByPk(followup.id, {
+            include: [{model: User, as: "creator", attributes: ["full_name"]}]
+        });
+
+        res.status(201).json({message: "Follow-up created", followup: fullFollowup});
+    } catch (error) {
+        console.error("Error creating follow-up:", error);
+        res.status(500).json({message: "Server error"});
     }
 };
 

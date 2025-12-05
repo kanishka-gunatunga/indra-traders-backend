@@ -5,17 +5,19 @@ export interface SparePartSaleFollowupAttributes {
     activity: string;
     activity_date: Date;
     spare_part_sale_id: number;
+    created_by?: number;
     createdAt?: Date;
     updatedAt?: Date;
 }
 
-export type SparePartSaleFollowupCreationAttributes = Optional<SparePartSaleFollowupAttributes, "id" | "createdAt" | "updatedAt">;
+export type SparePartSaleFollowupCreationAttributes = Optional<SparePartSaleFollowupAttributes, "id" | "createdAt" | "updatedAt" | "created_by">;
 
 class SparePartSaleFollowup extends Model<SparePartSaleFollowupAttributes, SparePartSaleFollowupCreationAttributes> implements SparePartSaleFollowupAttributes {
     public id!: number;
     public activity!: string;
     public activity_date!: Date;
     public spare_part_sale_id!: number;
+    public created_by!: number;
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
 }
@@ -43,6 +45,11 @@ export default (sequelize: Sequelize) => {
                 onDelete: "CASCADE",
                 onUpdate: "CASCADE"
             },
+            created_by: {
+                type: DataTypes.INTEGER.UNSIGNED,
+                allowNull: true,
+                references: {model: "users", key: "id"}
+            }
         },
         {
             sequelize,

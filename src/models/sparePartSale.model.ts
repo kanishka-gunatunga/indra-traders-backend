@@ -11,6 +11,7 @@ export interface SparePartSaleAttributes {
     call_agent_id: number;
     assigned_sales_id?: number | null;
     current_level: 1 | 2 | 3;
+    branch: string;
     vehicle_make?: string | null;
     vehicle_model?: string | null;
     part_no?: string | null;
@@ -32,6 +33,7 @@ class SparePartSale extends Model<SparePartSaleAttributes, SparePartSaleCreation
     public call_agent_id!: number;
     public assigned_sales_id!: number | null;
     public current_level!: 1 | 2 | 3;
+    public branch!: string;
     public vehicle_make!: string | null;
     public vehicle_model!: string | null;
     public part_no!: string | null;
@@ -82,6 +84,10 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
                 defaultValue: 1,
                 validate: { isIn: [[1, 2, 3]] }
+            },
+            branch: {
+                type: DataTypes.STRING(100),
+                allowNull: false,
             },
             vehicle_make: {
                 type: DataTypes.STRING(100),

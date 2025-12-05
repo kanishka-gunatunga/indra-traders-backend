@@ -64,7 +64,47 @@ export const handleServiceIntake = async (req: Request, res: Response) => {
     }
 };
 
+// export const createAssignToSale = async (req: Request, res: Response) => {
+//     try {
+//         const {
+//             customer_id,
+//             vehicle_id,
+//             vehicle_make,
+//             vehicle_model,
+//             year_of_manufacture,
+//             service_category,
+//             additional_note,
+//             lead_source,
+//             priority,
+//         } = req.body;
+//
+//         const ticket_number = `ISP${Date.now()}`;
+//
+//         const newSale = await ServiceParkSale.create({
+//             ticket_number,
+//             date: new Date(),
+//             customer_id,
+//             vehicle_id,
+//             vehicle_make,
+//             vehicle_model,
+//             service_category,
+//             year_of_manufacture,
+//             additional_note,
+//             lead_source,
+//             priority,
+//             status: "NEW",
+//         });
+//
+//         res.status(201).json({message: "Sale assigned", sale: newSale});
+//     } catch (error) {
+//         console.error(error);
+//         res.status(500).json({error: "Failed to create assign-to-sale"});
+//     }
+// };
+
+
 export const createAssignToSale = async (req: Request, res: Response) => {
+    const t = await db.sequelize.transaction();
     try {
         const {
             customer_id,
@@ -76,25 +116,131 @@ export const createAssignToSale = async (req: Request, res: Response) => {
             additional_note,
             lead_source,
             priority,
+
+            call_agent_id,
+
+            customer_name,
+            contact_number,
+            email,
+            city,
+            vehicle_type,
+            is_self_assigned,
+            sales_user_id,
+            remark
         } = req.body;
 
-        const ticket_number = `ISP${Date.now()}`;
+        const creatorId = is_self_assigned ? sales_user_id : call_agent_id;
+
+        const creatorUser = await User.findByPk(creatorId);
+
+        if (!creatorUser) {
+            return res.status(http.BAD_REQUEST).json({message: "Creator user not found"});
+        }
+
+        const userBranch = creatorUser.branch;
+
+        let finalCustomerId = customer_id;
+        let finalVehicleId = vehicle_id;
+
+        if (is_self_assigned && !customer_id) {
+            let customer = await Customer.findOne({where: {phone_number: contact_number}, transaction: t});
+            if (!customer) {
+                customer = await Customer.create({
+                    id: `CUS${Date.now()}`,
+                    customer_name,
+                    phone_number: contact_number,
+                    email,
+                    city,
+                    lead_source: lead_source || "Direct Walk-in"
+                } as any, {transaction: t});
+            }
+
+            finalCustomerId = customer.id;
+
+            const tempVehicleNo = `TEMP-${Date.now()}`;
+
+            const vehicle = await ServiceParkVehicleHistory.create({
+                vehicle_no: tempVehicleNo,
+                customer_id: finalCustomerId,
+                // Map simplified fields. Note: Your VehicleHistory model has owner_name, contact_no fields
+                // that are separate from the Customer model.
+                owner_name: customer_name,
+                contact_no: contact_number,
+                odometer: 0, // Mandatory field, default to 0
+                created_by: sales_user_id,
+                // You might want to add 'make' and 'model' to VehicleHistory attributes if not present,
+                // or just store them in the Sale record as snapshots.
+            }, {transaction: t});
+
+            finalVehicleId = vehicle.id;
+        }
+
+        let status: "NEW" | "ONGOING" = "NEW";
+        let assignedId: number | null = null;
+        let currentLevel: 1 | 2 | 3 = 1;
+
+        if (is_self_assigned && sales_user_id) {
+            status = "ONGOING";
+            assignedId = sales_user_id;
+            const salesUser = await User.findByPk(sales_user_id);
+            if (salesUser) {
+                currentLevel = getLevelFromRole(salesUser.user_role) as 1 | 2 | 3;
+            }
+        }
 
         const newSale = await ServiceParkSale.create({
-            ticket_number,
+            ticket_number: `ISP${Date.now()}`,
             date: new Date(),
-            customer_id,
-            vehicle_id,
-            vehicle_make,
-            vehicle_model,
-            service_category,
-            year_of_manufacture,
-            additional_note,
-            lead_source,
-            priority,
-            status: "NEW",
-        });
+            customer_id: finalCustomerId,
+            vehicle_id: finalVehicleId,
 
+            branch: userBranch,
+
+            // Snapshot details for the sale table
+            vehicle_make: vehicle_make || "Unknown",
+            vehicle_model: vehicle_model || "Unknown",
+            year_of_manufacture: year_of_manufacture || new Date().getFullYear(),
+            service_category: service_category || "General",
+
+            additional_note: additional_note || remark, // Mapped from remark
+            lead_source,
+            priority: priority || 0,
+
+            status,
+            sales_user_id: assignedId,
+            current_level: currentLevel
+        }, {transaction: t});
+
+        if (assignedId && db.ServiceParkSaleHistory) {
+            await db.ServiceParkSaleHistory.create({
+                service_park_sale_id: newSale.id,
+                action_by: assignedId,
+                action_type: "CREATED_AND_SELF_ASSIGNED",
+                previous_level: 0,
+                new_level: currentLevel,
+                details: `Lead created and self-assigned by Sales Agent`,
+                timestamp: new Date()
+            } as any, {transaction: t});
+        }
+
+        // const ticket_number = `ISP${Date.now()}`;
+        //
+        // const newSale = await ServiceParkSale.create({
+        //     ticket_number,
+        //     date: new Date(),
+        //     customer_id,
+        //     vehicle_id,
+        //     vehicle_make,
+        //     vehicle_model,
+        //     service_category,
+        //     year_of_manufacture,
+        //     additional_note,
+        //     lead_source,
+        //     priority,
+        //     status: "NEW",
+        // });
+
+        await t.commit();
         res.status(201).json({message: "Sale assigned", sale: newSale});
     } catch (error) {
         console.error(error);
@@ -131,8 +277,18 @@ export const getSaleDetails = async (req: Request, res: Response) => {
             include: [
                 {model: Customer, as: "customer"},
                 {model: ServiceParkVehicleHistory, as: "vehicle"},
-                {model: ServiceParkSaleFollowUp, as: "followups"},
-                {model: ServiceParkSaleReminder, as: "reminders"},
+                {
+                    model: ServiceParkSaleFollowUp, as: "followups",
+                    include: [
+                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                    ]
+                },
+                {
+                    model: ServiceParkSaleReminder, as: "reminders",
+                    include: [
+                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                    ]
+                },
                 {model: User, attributes: ["id", "full_name", "email"]},
             ],
         });
@@ -152,8 +308,18 @@ export const getSaleDetailsByTicket = async (req: Request, res: Response) => {
             include: [
                 {model: Customer, as: "customer"},
                 {model: ServiceParkVehicleHistory, as: "vehicle"},
-                {model: ServiceParkSaleFollowUp, as: "followups"},
-                {model: ServiceParkSaleReminder, as: "reminders"},
+                {
+                    model: ServiceParkSaleFollowUp, as: "followups",
+                    include: [
+                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                    ]
+                },
+                {
+                    model: ServiceParkSaleReminder, as: "reminders",
+                    include: [
+                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                    ]
+                },
                 {model: User, attributes: ["id", "full_name", "email"], as: "salesUser"},
             ]
         });
@@ -267,7 +433,15 @@ export const listVehicleHistories = async (req: Request, res: Response) => {
 export const listServiceParkSales = async (req: Request, res: Response) => {
     try {
         const userId = (req as any).user?.id || Number(req.query.userId);
+
+        const currentUser = await User.findByPk(userId);
+
+        if (!currentUser) {
+            return res.status(http.UNAUTHORIZED).json({message: "User not authenticated"});
+        }
+
         const userRole = (req as any).user?.user_role || req.query.userRole;
+        const userBranch = currentUser.branch;
 
         const userLevel = getLevelFromRole(userRole);
 
@@ -279,33 +453,38 @@ export const listServiceParkSales = async (req: Request, res: Response) => {
 
         if (userRole === "ADMIN") {
             if (status) whereClause.status = status;
-        } else if (userLevel > 0) {
+        } else {
 
-            whereClause.current_level = userLevel;
+            whereClause.branch = userBranch;
+            if (userLevel > 0) {
 
-            if (status) {
+                whereClause.current_level = userLevel;
 
-                if (status === "NEW") {
-                    whereClause.status = "NEW";
-                } else {
-                    whereClause.status = status;
-                    whereClause.sales_user_id = userId;
-                }
-            } else {
-                whereClause[Op.and] = [
-                    {current_level: userLevel},
-                    {
-                        [Op.or]: [
-                            {status: "NEW"},
-                            {
-                                [Op.and]: [
-                                    {status: {[Op.ne]: "NEW"}},
-                                    {sales_user_id: userId}
-                                ]
-                            }
-                        ]
+                if (status) {
+
+                    if (status === "NEW") {
+                        whereClause.status = "NEW";
+                    } else {
+                        whereClause.status = status;
+                        whereClause.sales_user_id = userId;
                     }
-                ];
+                } else {
+                    whereClause[Op.and] = [
+                        {current_level: userLevel},
+                        {branch: userBranch},
+                        {
+                            [Op.or]: [
+                                {status: "NEW"},
+                                {
+                                    [Op.and]: [
+                                        {status: {[Op.ne]: "NEW"}},
+                                        {sales_user_id: userId}
+                                    ]
+                                }
+                            ]
+                        }
+                    ];
+                }
             }
         }
 
@@ -434,33 +613,82 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
 };
 
 
+// export const createFollowup = async (req: Request, res: Response) => {
+//     try {
+//         const {activity, activity_date, service_park_sale_id} = req.body;
+//         const sale = await ServiceParkSale.findByPk(service_park_sale_id);
+//         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+//
+//         const f = await ServiceParkSaleFollowUp.create({activity, activity_date, service_park_sale_id});
+//         res.status(http.CREATED).json({message: "Followup created", followup: f});
+//     } catch (err) {
+//         console.error("createFollowup error:", err);
+//         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+//     }
+// };
+
+
 export const createFollowup = async (req: Request, res: Response) => {
     try {
-        const {activity, activity_date, service_park_sale_id} = req.body;
-        const sale = await ServiceParkSale.findByPk(service_park_sale_id);
-        if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+        const {activity, activity_date, service_park_sale_id, userId} = req.body;
 
-        const f = await ServiceParkSaleFollowUp.create({activity, activity_date, service_park_sale_id});
-        res.status(http.CREATED).json({message: "Followup created", followup: f});
-    } catch (err) {
-        console.error("createFollowup error:", err);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        const followup = await ServiceParkSaleFollowUp.create({
+            activity,
+            activity_date,
+            service_park_sale_id,
+            created_by: userId
+        });
+
+        const fullFollowup = await ServiceParkSaleFollowUp.findByPk(followup.id, {
+            include: [{model: User, as: "creator", attributes: ["full_name"]}]
+        });
+
+        res.status(201).json({message: "Follow-up created", followup: fullFollowup});
+    } catch (error) {
+        console.error("Error creating follow-up:", error);
+        res.status(500).json({message: "Server error"});
     }
 };
+
+
+// export const createReminder = async (req: Request, res: Response) => {
+//     try {
+//         const {task_title, task_date, note, service_park_sale_id} = req.body;
+//         const sale = await ServiceParkSale.findByPk(service_park_sale_id);
+//         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+//
+//         const reminder = await ServiceParkSaleReminder.create({task_title, task_date, note, service_park_sale_id});
+//         res.status(http.CREATED).json({message: "Reminder created", reminder: reminder});
+//     } catch (err) {
+//         console.error("createReminder error:", err);
+//         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+//     }
+// };
+
 
 export const createReminder = async (req: Request, res: Response) => {
     try {
-        const {task_title, task_date, note, service_park_sale_id} = req.body;
-        const sale = await ServiceParkSale.findByPk(service_park_sale_id);
-        if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+        const {task_title, task_date, note, service_park_sale_id, userId} = req.body;
 
-        const reminder = await ServiceParkSaleReminder.create({task_title, task_date, note, service_park_sale_id});
-        res.status(http.CREATED).json({message: "Reminder created", reminder: reminder});
-    } catch (err) {
-        console.error("createReminder error:", err);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        const followup = await ServiceParkSaleReminder.create({
+            task_title,
+            task_date,
+            note,
+            service_park_sale_id,
+            created_by: userId
+        });
+
+        const fullFollowup = await ServiceParkSaleReminder.findByPk(followup.id, {
+            include: [{model: User, as: "creator", attributes: ["full_name"]}]
+        });
+
+        res.status(201).json({message: "Follow-up created", followup: fullFollowup});
+    } catch (error) {
+        console.error("Error creating follow-up:", error);
+        res.status(500).json({message: "Server error"});
     }
 };
+
 
 export const getNearestRemindersBySalesUser = async (req: Request, res: Response) => {
     try {

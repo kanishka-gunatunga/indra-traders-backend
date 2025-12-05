@@ -5,11 +5,12 @@ export interface FollowUpAttributes {
     activity: string;
     activity_date: Date;
     complaintId: number;
+    created_by?: number;
     createdAt?: Date;
     updatedAt?: Date;
 }
 
-export type FollowUpCreationAttributes = Optional<FollowUpAttributes, "id" | "createdAt" | "updatedAt">;
+export type FollowUpCreationAttributes = Optional<FollowUpAttributes, "id" | "createdAt" | "updatedAt" | "created_by">;
 
 class ComplaintFollowUp extends Model<FollowUpAttributes, FollowUpCreationAttributes>
     implements FollowUpAttributes {
@@ -17,7 +18,7 @@ class ComplaintFollowUp extends Model<FollowUpAttributes, FollowUpCreationAttrib
     public activity!: string;
     public activity_date!: Date;
     public complaintId!: number;
-
+    public created_by!: number;
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
 }
@@ -45,6 +46,11 @@ export default (sequelize: Sequelize) => {
                 onDelete: "CASCADE",
                 onUpdate: "CASCADE",
             },
+            created_by: {
+                type: DataTypes.INTEGER.UNSIGNED,
+                allowNull: true,
+                references: {model: "users", key: "id"}
+            }
         },
         {
             sequelize,

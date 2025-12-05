@@ -1,16 +1,38 @@
 import {Request, Response} from "express";
 import db from "../models";
 
-const {VehicleSaleFollowup, VehicleSale} = db;
+const {VehicleSaleFollowup, VehicleSale, User} = db;
+
+// export const createFollowUp = async (req: Request, res: Response) => {
+//     try {
+//         const data = req.body;
+//         const followup = await VehicleSaleFollowup.create(data);
+//         res.status(201).json({message: "Follow-up created", followup});
+//     } catch (error) {
+//         console.error("Error creating follow-up:", error);
+//         res.status(500).json({message: "Server error"});
+//     }
+// };
 
 export const createFollowUp = async (req: Request, res: Response) => {
     try {
-        const data = req.body;
-        const followup = await VehicleSaleFollowup.create(data);
-        res.status(201).json({message: "Follow-up created", followup});
+        const { activity, activity_date, vehicleSaleId, userId } = req.body;
+
+        const followup = await VehicleSaleFollowup.create({
+            activity,
+            activity_date,
+            vehicleSaleId,
+            created_by: userId
+        });
+
+        const fullFollowup = await VehicleSaleFollowup.findByPk(followup.id, {
+            include: [{ model: User, as: "creator", attributes: ["full_name"] }]
+        });
+
+        res.status(201).json({ message: "Follow-up created", followup: fullFollowup });
     } catch (error) {
         console.error("Error creating follow-up:", error);
-        res.status(500).json({message: "Server error"});
+        res.status(500).json({ message: "Server error" });
     }
 };
 

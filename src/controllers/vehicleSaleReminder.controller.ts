@@ -1,17 +1,40 @@
 import {Request, Response} from "express";
 import db from "../models";
 
-const {VehicleSaleReminder, VehicleSale} = db;
+const {VehicleSaleReminder, VehicleSale, User} = db;
 
+
+// export const createReminder = async (req: Request, res: Response) => {
+//     try {
+//         const data = req.body;
+//         const reminder = await VehicleSaleReminder.create(data);
+//         res.status(201).json({message: "Reminder created", reminder});
+//     } catch (error) {
+//         console.error("Error creating reminder:", error);
+//         res.status(500).json({message: "Server error"});
+//     }
+// };
 
 export const createReminder = async (req: Request, res: Response) => {
     try {
-        const data = req.body;
-        const reminder = await VehicleSaleReminder.create(data);
-        res.status(201).json({message: "Reminder created", reminder});
+        const { task_title, task_date, note, vehicleSaleId , userId } = req.body;
+
+        const followup = await VehicleSaleReminder.create({
+            task_title,
+            task_date,
+            note,
+            vehicleSaleId,
+            created_by: userId
+        });
+
+        const fullFollowup = await VehicleSaleReminder.findByPk(followup.id, {
+            include: [{ model: User, as: "creator", attributes: ["full_name"] }]
+        });
+
+        res.status(201).json({ message: "Follow-up created", followup: fullFollowup });
     } catch (error) {
-        console.error("Error creating reminder:", error);
-        res.status(500).json({message: "Server error"});
+        console.error("Error creating follow-up:", error);
+        res.status(500).json({ message: "Server error" });
     }
 };
 

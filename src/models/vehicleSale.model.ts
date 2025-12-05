@@ -14,6 +14,7 @@ export interface VehicleSaleAttributes {
     call_agent_id: number;
     assigned_sales_id?: number | null;
     current_level: 1 | 2 | 3;
+    branch: string;
     vehicle_make: string;
     vehicle_model: string;
     manufacture_year: number;
@@ -42,6 +43,7 @@ class VehicleSale
     public call_agent_id!: number;
     public assigned_sales_id!: number | null;
     public current_level!: 1 | 2 | 3;
+    public branch!: string;
     public vehicle_make!: string;
     public vehicle_model!: string;
     public manufacture_year!: number;
@@ -92,7 +94,11 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.INTEGER,
                 allowNull: false,
                 defaultValue: 1,
-                validate: { isIn: [[1, 2, 3]] }
+                validate: {isIn: [[1, 2, 3]]}
+            },
+            branch: {
+                type: DataTypes.STRING(100),
+                allowNull: false,
             },
             vehicle_make: {
                 type: DataTypes.STRING(100),

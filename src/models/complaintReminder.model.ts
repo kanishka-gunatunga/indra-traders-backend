@@ -6,11 +6,12 @@ export interface ReminderAttributes {
     task_date: Date;
     note?: string | null;
     complaintId: number;
+    created_by?: number;
     createdAt?: Date;
     updatedAt?: Date;
 }
 
-export type ReminderCreationAttributes = Optional<ReminderAttributes, "id" | "note" | "createdAt" | "updatedAt">;
+export type ReminderCreationAttributes = Optional<ReminderAttributes, "id" | "note" | "createdAt" | "updatedAt" | "created_by">;
 
 class ComplaintReminder extends Model<ReminderAttributes, ReminderCreationAttributes>
     implements ReminderAttributes {
@@ -19,6 +20,7 @@ class ComplaintReminder extends Model<ReminderAttributes, ReminderCreationAttrib
     public task_date!: Date;
     public note!: string | null;
     public complaintId!: number;
+    public created_by!: number;
 
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
@@ -51,6 +53,11 @@ export default (sequelize: Sequelize) => {
                 onDelete: "CASCADE",
                 onUpdate: "CASCADE",
             },
+            created_by: {
+                type: DataTypes.INTEGER.UNSIGNED,
+                allowNull: true,
+                references: {model: "users", key: "id"}
+            }
         },
         {
             sequelize,

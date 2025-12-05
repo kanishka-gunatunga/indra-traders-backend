@@ -66,11 +66,12 @@ export interface FastTrackFollowupAttrs {
     sale_id: number;
     activity: string;
     activity_date: Date;
+    created_by?: number;
     createdAt?: Date;
     updatedAt?: Date;
 }
 
-export type FastTrackFollowupCreate = Optional<FastTrackFollowupAttrs, "id">;
+export type FastTrackFollowupCreate = Optional<FastTrackFollowupAttrs, "id" | "created_by">;
 
 export class FastTrackFollowup
     extends Model<FastTrackFollowupAttrs, FastTrackFollowupCreate>
@@ -79,6 +80,7 @@ export class FastTrackFollowup
     sale_id!: number;
     activity!: string;
     activity_date!: Date;
+    public created_by!: number;
     readonly createdAt!: Date;
     readonly updatedAt!: Date;
 }
@@ -90,6 +92,11 @@ export default (sequelize: Sequelize) => {
             sale_id: {type: DataTypes.INTEGER.UNSIGNED, allowNull: false},
             activity: {type: DataTypes.STRING(255), allowNull: false},
             activity_date: {type: DataTypes.DATE, allowNull: false},
+            created_by: {
+                type: DataTypes.INTEGER.UNSIGNED,
+                allowNull: true,
+                references: {model: "users", key: "id"}
+            }
         },
         {sequelize, tableName: "fast_track_followups", timestamps: true}
     );

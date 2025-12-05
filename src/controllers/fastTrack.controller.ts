@@ -708,6 +708,14 @@ export const assignBestMatchToSale = async (req: Request, res: Response) => {
         const dr = await FastTrackRequest.findByPk(direct_request_id);
         if (!dr) return res.status(http.NOT_FOUND).json({message: "Direct request not found"});
 
+        const creatorUser = await User.findByPk(dr.call_agent_id);
+
+        if (!creatorUser) {
+            return res.status(http.BAD_REQUEST).json({message: "Creator user not found"});
+        }
+
+        const userBranch = creatorUser.branch;
+
         const v = await VehicleListing.findByPk(vehicle_id);
         if (!v) return res.status(http.NOT_FOUND).json({message: "Vehicle not found"});
 
@@ -716,6 +724,7 @@ export const assignBestMatchToSale = async (req: Request, res: Response) => {
             customer_id: dr.customer_id,
             vehicle_id,
             direct_request_id,
+            branch: userBranch,
             call_agent_id: dr.call_agent_id,
             assigned_sales_id: salesUserId,
             status: "NEW",
@@ -796,34 +805,80 @@ export const updateSalePriority = async (req: Request, res: Response) => {
 };
 
 
+// export const createSaleFollowup = async (req: Request, res: Response) => {
+//     try {
+//         const {sale_id, activity, activity_date} = req.body;
+//         const sale = await FastTrackSale.findByPk(sale_id);
+//         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+//
+//         const f = await FastTrackFollowup.create({sale_id, activity, activity_date});
+//         return res.status(http.CREATED).json(f);
+//     } catch (e) {
+//         console.error("createSaleFollowup", e);
+//         return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+//     }
+// };
+
 export const createSaleFollowup = async (req: Request, res: Response) => {
     try {
-        const {sale_id, activity, activity_date} = req.body;
-        const sale = await FastTrackSale.findByPk(sale_id);
-        if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+        const {sale_id, activity, activity_date, userId} = req.body;
 
-        const f = await FastTrackFollowup.create({sale_id, activity, activity_date});
-        return res.status(http.CREATED).json(f);
-    } catch (e) {
-        console.error("createSaleFollowup", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        const followup = await FastTrackFollowup.create({
+            activity,
+            activity_date,
+            sale_id,
+            created_by: userId
+        });
+
+        const fullFollowup = await FastTrackFollowup.findByPk(followup.id, {
+            include: [{model: User, as: "creator", attributes: ["full_name"]}]
+        });
+
+        res.status(201).json({message: "Follow-up created", followup: fullFollowup});
+    } catch (error) {
+        console.error("Error creating follow-up:", error);
+        res.status(500).json({message: "Server error"});
     }
 };
 
 
 export const createSaleReminder = async (req: Request, res: Response) => {
     try {
-        const {sale_id, task_title, task_date, note} = req.body;
-        const sale = await FastTrackSale.findByPk(sale_id);
-        if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+        const {sale_id, task_title, task_date, note, userId} = req.body;
 
-        const r = await FastTrackReminder.create({sale_id, task_title, task_date, note});
-        return res.status(http.CREATED).json(r);
-    } catch (e) {
-        console.error("createSaleReminder", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        const followup = await FastTrackReminder.create({
+            task_title,
+            task_date,
+            note,
+            sale_id,
+            created_by: userId
+        });
+
+        const fullFollowup = await FastTrackReminder.findByPk(followup.id, {
+            include: [{model: User, as: "creator", attributes: ["full_name"]}]
+        });
+
+        res.status(201).json({message: "Follow-up created", followup: fullFollowup});
+    } catch (error) {
+        console.error("Error creating follow-up:", error);
+        res.status(500).json({message: "Server error"});
     }
 };
+
+
+// export const createSaleReminder = async (req: Request, res: Response) => {
+//     try {
+//         const {sale_id, task_title, task_date, note} = req.body;
+//         const sale = await FastTrackSale.findByPk(sale_id);
+//         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+//
+//         const r = await FastTrackReminder.create({sale_id, task_title, task_date, note});
+//         return res.status(http.CREATED).json(r);
+//     } catch (e) {
+//         console.error("createSaleReminder", e);
+//         return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+//     }
+// };
 
 
 export const getSaleByTicket = async (req: Request, res: Response) => {
@@ -834,8 +889,18 @@ export const getSaleByTicket = async (req: Request, res: Response) => {
             include: [
                 {model: Customer, as: "customer"},
                 {model: VehicleListing, as: "vehicle"},
-                {model: FastTrackFollowup, as: "followups"},
-                {model: FastTrackReminder, as: "saleReminders"},
+                {
+                    model: FastTrackFollowup, as: "followups",
+                    include: [
+                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                    ]
+                },
+                {
+                    model: FastTrackReminder, as: "saleReminders",
+                    include: [
+                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                    ]
+                },
             ],
         });
         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
@@ -928,14 +993,22 @@ export const getSaleByTicket = async (req: Request, res: Response) => {
 export const listSales = async (req: Request, res: Response) => {
     try {
         const userId = (req as any).user?.id || Number(req.query.userId);
+
+        const currentUser = await User.findByPk(userId);
+
+        if (!currentUser) {
+            return res.status(http.UNAUTHORIZED).json({message: "User not authenticated"});
+        }
+
         const userRole = (req as any).user?.user_role || req.query.userRole;
+        const userBranch = currentUser.branch;
 
         const userLevel = getLevelFromRole(userRole);
 
         const statusParam = req.query.status;
         const status = typeof statusParam === "string" ? statusParam.toUpperCase() : undefined;
 
-        const { assigned_sales_id } = req.query;
+        const {assigned_sales_id} = req.query;
 
         let whereClause: any = {};
 
@@ -945,42 +1018,44 @@ export const listSales = async (req: Request, res: Response) => {
 
         if (userRole === "ADMIN") {
             if (status) whereClause.status = status;
-        }
+        } else {
+            whereClause.branch = userBranch;
+            if (userLevel > 0) {
+                whereClause.current_level = userLevel;
 
-        else if (userLevel > 0) {
-            whereClause.current_level = userLevel;
-
-            if (status) {
-                if (status === "NEW") {
-                    whereClause.status = "NEW";
-                } else {
-                    whereClause.status = status;
-                    whereClause.assigned_sales_id = userId;
-                }
-            } else {
-                whereClause[Op.and] = [
-                    { current_level: userLevel },
-                    {
-                        [Op.or]: [
-                            { status: "NEW" },
-                            {
-                                [Op.and]: [
-                                    { status: { [Op.ne]: "NEW" } },
-                                    { assigned_sales_id: userId }
-                                ]
-                            }
-                        ]
+                if (status) {
+                    if (status === "NEW") {
+                        whereClause.status = "NEW";
+                    } else {
+                        whereClause.status = status;
+                        whereClause.assigned_sales_id = userId;
                     }
-                ];
+                } else {
+                    whereClause[Op.and] = [
+                        {current_level: userLevel},
+                        {branch: userBranch},
+                        {
+                            [Op.or]: [
+                                {status: "NEW"},
+                                {
+                                    [Op.and]: [
+                                        {status: {[Op.ne]: "NEW"}},
+                                        {assigned_sales_id: userId}
+                                    ]
+                                }
+                            ]
+                        }
+                    ];
+                }
             }
         }
 
         const rows = await FastTrackSale.findAll({
             where: whereClause,
             include: [
-                { model: Customer, as: "customer" },
-                { model: VehicleListing, as: "vehicle" },
-                { model: User, as: "salesUser", attributes: ["id", "full_name"] },
+                {model: Customer, as: "customer"},
+                {model: VehicleListing, as: "vehicle"},
+                {model: User, as: "salesUser", attributes: ["id", "full_name"]},
             ],
             order: [["createdAt", "DESC"]],
         });
@@ -996,13 +1071,13 @@ export const listSales = async (req: Request, res: Response) => {
 export const promoteToNextLevel = async (req: Request, res: Response) => {
     const t = await db.sequelize.transaction();
     try {
-        const { id } = req.params;
+        const {id} = req.params;
         const userId = (req as any).user?.id || req.body.userId;
 
         const sale = await FastTrackSale.findByPk(id);
         if (!sale) {
             await t.rollback();
-            return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
+            return res.status(http.NOT_FOUND).json({message: "Sale not found"});
         }
 
         const currentLevel = sale.current_level;
@@ -1010,13 +1085,13 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
 
         if (nextLevel > 3) {
             await t.rollback();
-            return res.status(http.BAD_REQUEST).json({ message: "Already at maximum sales level" });
+            return res.status(http.BAD_REQUEST).json({message: "Already at maximum sales level"});
         }
 
         sale.status = "NEW";
         sale.current_level = nextLevel;
         sale.assigned_sales_id = null;
-        await sale.save({ transaction: t });
+        await sale.save({transaction: t});
 
         await FastTrackSaleHistory.create({
             fast_track_sale_id: sale.id,
@@ -1026,32 +1101,31 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
             new_level: nextLevel,
             details: `Lead escalated from Level ${currentLevel} to Level ${nextLevel}`,
             timestamp: new Date()
-        } as any, { transaction: t });
+        } as any, {transaction: t});
 
         await t.commit();
-        res.status(http.OK).json({ message: `Lead promoted to Sales Level ${nextLevel}`, sale });
+        res.status(http.OK).json({message: `Lead promoted to Sales Level ${nextLevel}`, sale});
 
     } catch (error) {
         await t.rollback();
         console.error("Error promoting sale:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
+        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
     }
 };
 
 export const getSaleHistory = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
+        const {id} = req.params;
         const history = await FastTrackSaleHistory.findAll({
-            where: { fast_track_sale_id: id },
+            where: {fast_track_sale_id: id},
             order: [["timestamp", "DESC"]],
-            include: [{ model: User, as: "actor", attributes: ['full_name', 'user_role'] }]
+            include: [{model: User, as: "actor", attributes: ['full_name', 'user_role']}]
         });
         res.status(http.OK).json(history);
     } catch (error) {
-        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching history" });
+        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error fetching history"});
     }
 };
-
 
 
 export const getDirectReminders = async (req: Request, res: Response) => {
@@ -1139,5 +1213,143 @@ export const getSaleFollowups = async (req: Request, res: Response) => {
     } catch (e) {
         console.error("getSaleFollowups", e);
         return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+    }
+};
+
+
+export const createSaleDirect = async (req: Request, res: Response) => {
+    const t = await db.sequelize.transaction();
+    try {
+        const {
+            // Customer Info
+            customer_name,
+            contact_number,
+            email,
+            city,
+
+            // Vehicle Interest
+            vehicle_make,
+            vehicle_model,
+            vehicle_type,
+
+            // Meta
+            lead_source,
+            additional_note,
+            priority,
+            sales_user_id,
+            is_self_assigned
+        } = req.body;
+
+        if (!is_self_assigned || !sales_user_id) {
+            await t.rollback();
+            return res.status(http.BAD_REQUEST).json({message: "Invalid request: Missing user ID or flag"});
+        }
+
+        const creatorUser = await User.findByPk(sales_user_id);
+
+        if (!creatorUser) {
+            return res.status(http.BAD_REQUEST).json({message: "Creator user not found"});
+        }
+
+        const userBranch = creatorUser.branch;
+
+        // 1. Find or Create Customer
+        let customer = await Customer.findOne({where: {phone_number: contact_number}, transaction: t});
+        if (!customer) {
+            customer = await Customer.create({
+                id: `CUS${Date.now()}`,
+                customer_name,
+                phone_number: contact_number,
+                email,
+                city,
+                lead_source: lead_source || "Direct"
+            }, {transaction: t});
+        }
+
+        // 2. Create Placeholder Direct Request
+        // We need a request ID for the Sale table. We mark it 'ASSIGNED' immediately.
+        const dummyRequest = await FastTrackRequest.create({
+            customer_id: customer.id,
+            vehicle_type: vehicle_type || "Unknown",
+            vehicle_make,
+            vehicle_model,
+            status: "ASSIGNED",
+            call_agent_id: sales_user_id, // Attributed to sales agent
+            // Dummy values for required fields
+            grade: "Any",
+            manufacture_year: new Date().getFullYear(),
+            mileage_min: 0,
+            mileage_max: 0,
+            no_of_owners: 0,
+            price_from: 0,
+            price_to: 0
+        }, {transaction: t});
+
+        // 3. Create Placeholder Vehicle Listing
+        // We need a vehicle_id. Since we don't have a real inventory item yet, create a placeholder.
+        // Note: Ensure your 'VehicleListing' model allows duplicates or generate a unique pseudo-ID
+        const dummyVehicle = await VehicleListing.create({
+            make: vehicle_make,
+            model: vehicle_model,
+            type: vehicle_type || "Car",
+            price: 0,
+            // Dummy values
+            mileage: 0,
+            grade: "N/A",
+            manufacture_year: new Date().getFullYear(),
+            transmission: "AUTO", // Default
+            fuel_type: "PETROL", // Default
+            no_of_owners: 0,
+            capacity: "0",
+            color: "N/A",
+            vehicle_no: `TEMP-${Date.now()}` // Unique temp ID
+        }, {transaction: t});
+
+        // 4. Determine Level
+        let currentLevel = 1;
+        const salesUser = await User.findByPk(sales_user_id);
+        if (salesUser) {
+            currentLevel = getLevelFromRole(salesUser.user_role) as 1 | 2 | 3;
+        }
+
+        // 5. Create Sale Record
+        const newSale = await FastTrackSale.create({
+            ticket_number: `IMS${Date.now()}`,
+            customer_id: customer.id,
+            vehicle_id: dummyVehicle.id,
+            direct_request_id: dummyRequest.id,
+
+            call_agent_id: sales_user_id, // Created by this agent
+            assigned_sales_id: sales_user_id, // Assigned to this agent
+
+            branch: userBranch,
+
+            status: "ONGOING",
+            current_level: currentLevel as 1 | 2 | 3,
+
+            price_range_min: 0,
+            price_range_max: 0,
+            additional_note: additional_note,
+            priority: priority || 0
+        }, {transaction: t});
+
+        // 6. Log History
+        await FastTrackSaleHistory.create({
+            fast_track_sale_id: newSale.id,
+            action_by: sales_user_id,
+            action_type: "CREATED_AND_SELF_ASSIGNED",
+            previous_level: 0,
+            new_level: currentLevel,
+            details: `Lead created and self-assigned by Sales Agent`,
+            timestamp: new Date()
+        } as any, {transaction: t});
+
+        await t.commit();
+        res.status(http.CREATED).json({message: "Sale created successfully", sale: newSale});
+
+    } catch (error: any) {
+        await t.rollback();
+        console.error("createSaleDirect error:", error);
+        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error", detail: error.message});
     }
 };

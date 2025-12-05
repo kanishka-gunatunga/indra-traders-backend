@@ -117,6 +117,7 @@ export interface FastTrackSaleAttrs {
     call_agent_id: number;
     assigned_sales_id?: number | null;
     current_level: 1 | 2 | 3;
+    branch: string;
     status: FastTrackSaleStatus;
     price_range_min: number;
     price_range_max: number;
@@ -142,6 +143,7 @@ export class FastTrackSale
     call_agent_id!: number;
     assigned_sales_id!: number | null;
     public current_level!: 1 | 2 | 3;
+    public branch!: string;
     status!: FastTrackSaleStatus;
     price_range_min!: number;
     price_range_max!: number;
@@ -166,6 +168,10 @@ export default (sequelize: Sequelize) => {
                 allowNull: false,
                 defaultValue: 1,
                 validate: { isIn: [[1, 2, 3]] }
+            },
+            branch: {
+                type: DataTypes.STRING(100),
+                allowNull: false,
             },
             status: {
                 type: DataTypes.ENUM("NEW", "ONGOING", "WON", "LOST"),

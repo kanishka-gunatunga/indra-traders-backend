@@ -6,11 +6,12 @@ export interface ServiceParkSaleReminderAttributes {
     task_date: Date;
     note?: string | null;
     service_park_sale_id: number;
+    created_by?: number;
     createdAt?: Date;
     updatedAt?: Date;
 }
 
-export type ServiceParkSaleReminderCreationAttributes = Optional<ServiceParkSaleReminderAttributes, "id" | "note" | "createdAt" | "updatedAt">;
+export type ServiceParkSaleReminderCreationAttributes = Optional<ServiceParkSaleReminderAttributes, "id" | "note" | "createdAt" | "updatedAt" | "created_by">;
 
 class ServiceParkSaleReminder extends Model<ServiceParkSaleReminderAttributes, ServiceParkSaleReminderCreationAttributes> implements ServiceParkSaleReminderAttributes {
     public id!: number;
@@ -18,6 +19,7 @@ class ServiceParkSaleReminder extends Model<ServiceParkSaleReminderAttributes, S
     public task_date!: Date;
     public note!: string | null;
     public service_park_sale_id!: number;
+    public created_by!: number;
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
 }
@@ -49,6 +51,11 @@ export default (sequelize: Sequelize) => {
                 onDelete: "CASCADE",
                 onUpdate: "CASCADE"
             },
+            created_by: {
+                type: DataTypes.INTEGER.UNSIGNED,
+                allowNull: true,
+                references: {model: "users", key: "id"}
+            }
         },
         {
             sequelize,

@@ -6,11 +6,12 @@ export interface VehicleSaleReminderAttributes {
     task_date: Date;
     note?: string | null;
     vehicleSaleId: number;
+    created_by?: number;
     createdAt?: Date;
     updatedAt?: Date;
 }
 
-export type ReminderCreationAttributes = Optional<VehicleSaleReminderAttributes, "id" | "note" | "createdAt" | "updatedAt">;
+export type ReminderCreationAttributes = Optional<VehicleSaleReminderAttributes, "id" | "note" | "createdAt" | "updatedAt"  | "created_by">;
 
 class VehicleSaleReminder extends Model<VehicleSaleReminderAttributes, ReminderCreationAttributes>
     implements VehicleSaleReminderAttributes {
@@ -19,6 +20,7 @@ class VehicleSaleReminder extends Model<VehicleSaleReminderAttributes, ReminderC
     public task_date!: Date;
     public note!: string | null;
     public vehicleSaleId!: number;
+    public created_by!: number;
 
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
@@ -51,6 +53,11 @@ export default (sequelize: Sequelize) => {
                 onDelete: "CASCADE",
                 onUpdate: "CASCADE",
             },
+            created_by: {
+                type: DataTypes.INTEGER.UNSIGNED,
+                allowNull: true,
+                references: {model: "users", key: "id"}
+            }
         },
         {
             sequelize,

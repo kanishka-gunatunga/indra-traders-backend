@@ -6,11 +6,12 @@ export interface SparePartSaleReminderAttributes {
     task_date: Date;
     note?: string | null;
     spare_part_sale_id: number;
+    created_by?: number;
     createdAt?: Date;
     updatedAt?: Date;
 }
 
-export type SparePartSaleReminderCreationAttributes = Optional<SparePartSaleReminderAttributes, "id" | "note" | "createdAt" | "updatedAt">;
+export type SparePartSaleReminderCreationAttributes = Optional<SparePartSaleReminderAttributes, "id" | "note" | "createdAt" | "updatedAt" | "created_by">;
 
 class SparePartSaleReminder extends Model<SparePartSaleReminderAttributes, SparePartSaleReminderCreationAttributes> implements SparePartSaleReminderAttributes {
     public id!: number;
@@ -18,6 +19,7 @@ class SparePartSaleReminder extends Model<SparePartSaleReminderAttributes, Spare
     public task_date!: Date;
     public note!: string | null;
     public spare_part_sale_id!: number;
+    public created_by!: number;
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
 }
@@ -49,6 +51,11 @@ export default (sequelize: Sequelize) => {
                 onDelete: "CASCADE",
                 onUpdate: "CASCADE"
             },
+            created_by: {
+                type: DataTypes.INTEGER.UNSIGNED,
+                allowNull: true,
+                references: {model: "users", key: "id"}
+            }
         },
         {
             sequelize,

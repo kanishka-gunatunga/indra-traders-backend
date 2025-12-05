@@ -205,6 +205,17 @@ db.ComplaintReminder.belongsTo(db.Complaint, {foreignKey: "complaintId", as: "co
 db.Customer.hasMany(db.Event, {foreignKey: "customerId", as: "events"});
 db.Event.belongsTo(db.Customer, {foreignKey: "customerId", as: "customer"});
 
+db.ComplaintFollowUp.belongsTo(db.User, {
+    foreignKey: "created_by",
+    as: "creator"
+});
+
+db.ComplaintReminder.belongsTo(db.User, {
+    foreignKey: "created_by",
+    as: "creator"
+});
+
+
 // vehicle sale
 
 db.VehicleSale.belongsTo(db.Customer, {foreignKey: "customer_id", as: "customer"});
@@ -231,6 +242,16 @@ db.VehicleSaleHistory.belongsTo(db.VehicleSale, {
 db.VehicleSaleHistory.belongsTo(db.User, {
     foreignKey: "action_by",
     as: "actor",
+});
+
+db.VehicleSaleFollowup.belongsTo(db.User, {
+    foreignKey: "created_by",
+    as: "creator"
+});
+
+db.VehicleSaleReminder.belongsTo(db.User, {
+    foreignKey: "created_by",
+    as: "creator"
 });
 
 
@@ -268,6 +289,16 @@ db.SparePartSaleHistory.belongsTo(db.SparePartSale, {
 db.SparePartSaleHistory.belongsTo(db.User, {
     foreignKey: "action_by",
     as: "actor",
+});
+
+db.SparePartSaleFollowup.belongsTo(db.User, {
+    foreignKey: "created_by",
+    as: "creator"
+});
+
+db.SparePartSaleReminder.belongsTo(db.User, {
+    foreignKey: "created_by",
+    as: "creator"
 });
 
 
@@ -400,6 +431,16 @@ db.FastTrackSaleHistory.belongsTo(db.User, {
     as: "actor",
 });
 
+db.FastTrackFollowup.belongsTo(db.User, {
+    foreignKey: "created_by",
+    as: "creator"
+});
+
+db.FastTrackReminder.belongsTo(db.User, {
+    foreignKey: "created_by",
+    as: "creator"
+});
+
 
 // service park
 
@@ -439,6 +480,16 @@ db.ServiceParkSaleHistory.belongsTo(db.ServiceParkSale, {
 db.ServiceParkSaleHistory.belongsTo(db.User, {
     foreignKey: "action_by",
     as: "actor",
+});
+
+db.ServiceParkSaleFollowUp.belongsTo(db.User, {
+    foreignKey: "created_by",
+    as: "creator"
+});
+
+db.ServiceParkSaleReminder.belongsTo(db.User, {
+    foreignKey: "created_by",
+    as: "creator"
 });
 
 

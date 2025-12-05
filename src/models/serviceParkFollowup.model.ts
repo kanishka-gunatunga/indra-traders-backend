@@ -5,17 +5,19 @@ export interface ServiceParkSaleFollowupAttributes {
     activity: string;
     activity_date: Date;
     service_park_sale_id: number;
+    created_by?: number;
     createdAt?: Date;
     updatedAt?: Date;
 }
 
-export type ServiceParkSaleFollowupCreationAttributes = Optional<ServiceParkSaleFollowupAttributes, "id" | "createdAt" | "updatedAt">;
+export type ServiceParkSaleFollowupCreationAttributes = Optional<ServiceParkSaleFollowupAttributes, "id" | "createdAt" | "updatedAt" | "created_by">;
 
 class ServiceParkSaleFollowup extends Model<ServiceParkSaleFollowupAttributes, ServiceParkSaleFollowupCreationAttributes> implements ServiceParkSaleFollowupAttributes {
     public id!: number;
     public activity!: string;
     public activity_date!: Date;
     public service_park_sale_id!: number;
+    public created_by!: number;
     public readonly createdAt!: Date;
     public readonly updatedAt!: Date;
 }
@@ -43,6 +45,11 @@ export default (sequelize: Sequelize) => {
                 onDelete: "CASCADE",
                 onUpdate: "CASCADE"
             },
+            created_by: {
+                type: DataTypes.INTEGER.UNSIGNED,
+                allowNull: true,
+                references: {model: "users", key: "id"}
+            }
         },
         {
             sequelize,

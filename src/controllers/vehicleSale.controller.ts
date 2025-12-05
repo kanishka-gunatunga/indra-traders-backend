@@ -86,6 +86,16 @@ export const createVehicleSale = async (req: Request, res: Response) => {
             price_to,
         } = req.body;
 
+        const creatorId = is_self_assigned ? sales_user_id : call_agent_id;
+
+        const creatorUser = await User.findByPk(creatorId);
+
+        if (!creatorUser) {
+            return res.status(http.BAD_REQUEST).json({message: "Creator user not found"});
+        }
+
+        const userBranch = creatorUser.branch;
+
         let customerRecord = await Customer.findOne({where: {phone_number: contact_number}});
 
         if (!customerRecord) {
@@ -127,6 +137,8 @@ export const createVehicleSale = async (req: Request, res: Response) => {
             date: date || new Date(),
             status: status,
             customer_id: customerRecord.id,
+
+            branch: userBranch,
 
             call_agent_id: call_agent_id || (assignedId ? assignedId : 1),
             assigned_sales_id: assignedId,
@@ -255,7 +267,15 @@ export const createVehicleSale = async (req: Request, res: Response) => {
 export const getVehicleSales = async (req: Request, res: Response) => {
     try {
         const userId = (req as any).user?.id || Number(req.query.userId);
+
+        const currentUser = await User.findByPk(userId);
+
+        if (!currentUser) {
+            return res.status(http.UNAUTHORIZED).json({message: "User not authenticated"});
+        }
+
         const userRole = (req as any).user?.user_role || req.query.userRole;
+        const userBranch = currentUser.branch;
 
         const userLevel = getLevelFromRole(userRole);
 
@@ -271,47 +291,52 @@ export const getVehicleSales = async (req: Request, res: Response) => {
         }
 
         // --- SALES AGENT VIEW (Strict Isolation) ---
-        else if (userLevel > 0) {
-
-            // RULE 1: Level Isolation
-            // An agent can ONLY see leads sitting at their specific level.
-            whereClause.current_level = userLevel;
-
-            // RULE 2 & 3: Pool vs Assignment
-            if (status) {
-                // Case A: Filtering by specific status tab (e.g., clicking "Ongoing" tab)
-                if (status === "NEW") {
-                    // Shared Pool: See ALL 'NEW' leads at this level
-                    whereClause.status = "NEW";
-                } else {
-                    // Private Assignment: See 'ONGOING/WON/LOST' ONLY if assigned to me
-                    whereClause.status = status;
-                    whereClause.assigned_sales_id = userId;
-                }
-            } else {
-                // Case B: Dashboard / Kanban View (No status filter passed)
-                // Show: (Any 'NEW' lead at this level) OR (Any lead at this level assigned to me)
-                whereClause[Op.and] = [
-                    {current_level: userLevel}, // Re-enforce level check
-                    {
-                        [Op.or]: [
-                            {status: "NEW"},
-                            {
-                                [Op.and]: [
-                                    {status: {[Op.ne]: "NEW"}}, // Status is NOT 'NEW'
-                                    {assigned_sales_id: userId}    // AND assigned to user
-                                ]
-                            }
-                        ]
-                    }
-                ];
-            }
-        }
-
-        // --- CALL AGENT / FALLBACK ---
         else {
-            // Only see what they created (optional, adjust as needed)
-            // whereClause.call_agent_id = userId;
+            whereClause.branch = userBranch;
+
+            if (userLevel > 0) {
+
+                // RULE 1: Level Isolation
+                // An agent can ONLY see leads sitting at their specific level.
+                whereClause.current_level = userLevel;
+
+                // RULE 2 & 3: Pool vs Assignment
+                if (status) {
+                    // Case A: Filtering by specific status tab (e.g., clicking "Ongoing" tab)
+                    if (status === "NEW") {
+                        // Shared Pool: See ALL 'NEW' leads at this level
+                        whereClause.status = "NEW";
+                    } else {
+                        // Private Assignment: See 'ONGOING/WON/LOST' ONLY if assigned to me
+                        whereClause.status = status;
+                        whereClause.assigned_sales_id = userId;
+                    }
+                } else {
+                    // Case B: Dashboard / Kanban View (No status filter passed)
+                    // Show: (Any 'NEW' lead at this level) OR (Any lead at this level assigned to me)
+                    whereClause[Op.and] = [
+                        {current_level: userLevel}, // Re-enforce level check
+                        {branch: userBranch},
+                        {
+                            [Op.or]: [
+                                {status: "NEW"},
+                                {
+                                    [Op.and]: [
+                                        {status: {[Op.ne]: "NEW"}}, // Status is NOT 'NEW'
+                                        {assigned_sales_id: userId}    // AND assigned to user
+                                    ]
+                                }
+                            ]
+                        }
+                    ];
+                }
+            }
+
+            // --- CALL AGENT / FALLBACK ---
+            else {
+                // Only see what they created (optional, adjust as needed)
+                // whereClause.call_agent_id = userId;
+            }
         }
 
         const sales = await VehicleSale.findAll({
@@ -405,8 +430,18 @@ export const getSaleByTicketID = async (req: Request, res: Response) => {
                 {model: Customer, as: "customer"},
                 {model: User, as: "callAgent"},
                 {model: User, as: "salesUser"},
-                {model: VehicleSaleFollowup, as: "followups", order: [["activity_date", "DESC"]]},
-                {model: VehicleSaleReminder, as: "reminders", order: [["task_date", "ASC"]]}
+                {
+                    model: VehicleSaleFollowup, as: "followups", order: [["activity_date", "DESC"]],
+                    include: [
+                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                    ]
+                },
+                {
+                    model: VehicleSaleReminder, as: "reminders", order: [["task_date", "ASC"]],
+                    include: [
+                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                    ]
+                }
             ],
         });
 

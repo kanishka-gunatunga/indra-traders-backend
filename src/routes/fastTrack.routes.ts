@@ -84,4 +84,6 @@ r.get("/direct-requests/:directRequestId/best-matches", FT.getBestMatches);
 r.get("/sales/:id/history", FT.getSaleHistory);
 r.put("/sales/:id/promote", FT.promoteToNextLevel);
 
+r.post("/sales/create-direct", FT.createSaleDirect);
+
 export default r;

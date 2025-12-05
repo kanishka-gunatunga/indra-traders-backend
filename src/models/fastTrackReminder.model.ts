@@ -81,11 +81,12 @@ export interface FastTrackReminderAttrs {
     task_title: string;
     task_date: Date;
     note?: string | null;
+    created_by?: number;
     createdAt?: Date;
     updatedAt?: Date;
 }
 
-export type FastTrackReminderCreate = Optional<FastTrackReminderAttrs, "id">;
+export type FastTrackReminderCreate = Optional<FastTrackReminderAttrs, "id" | "created_by">;
 
 export class FastTrackReminder
     extends Model<FastTrackReminderAttrs, FastTrackReminderCreate>
@@ -96,6 +97,7 @@ export class FastTrackReminder
     task_title!: string;
     task_date!: Date;
     note!: string | null;
+    public created_by!: number;
     readonly createdAt!: Date;
     readonly updatedAt!: Date;
 }
@@ -109,6 +111,11 @@ export default (sequelize: Sequelize) => {
             task_title: {type: DataTypes.STRING(100), allowNull: false},
             task_date: {type: DataTypes.DATE, allowNull: false},
             note: {type: DataTypes.TEXT, allowNull: true},
+            created_by: {
+                type: DataTypes.INTEGER.UNSIGNED,
+                allowNull: true,
+                references: {model: "users", key: "id"}
+            }
         },
         {sequelize, tableName: "fast_track_reminders", timestamps: true}
     );

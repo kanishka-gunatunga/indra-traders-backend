@@ -8,6 +8,7 @@ export interface AssignToSalesAttributes {
     vehicle_id: number;
     sales_user_id?: number | null;
     current_level: 1 | 2 | 3;
+    branch: string;
     service_category: string;
     vehicle_make: string;
     vehicle_model: string;
@@ -34,6 +35,7 @@ export default (sequelize: Sequelize) => {
         public vehicle_id!: number;
         public sales_user_id?: number | null;
         public current_level!: 1 | 2 | 3;
+        public branch!: string;
         public service_category!: string;
         public vehicle_make!: string;
         public vehicle_model!: string;
@@ -75,7 +77,11 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.INTEGER,
                 allowNull: false,
                 defaultValue: 1,
-                validate: { isIn: [[1, 2, 3]] }
+                validate: {isIn: [[1, 2, 3]]}
+            },
+            branch: {
+                type: DataTypes.STRING(100),
+                allowNull: false,
             },
             service_category: {
                 type: DataTypes.STRING(100),

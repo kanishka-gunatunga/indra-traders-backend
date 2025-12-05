@@ -2,7 +2,7 @@ import {Request, Response} from "express";
 import db from "../models";
 import http from "http-status-codes";
 
-const {Complaint, Customer, ComplaintFollowUp, ComplaintReminder} = db;
+const {Complaint, Customer, ComplaintFollowUp, ComplaintReminder, User} = db;
 
 export const createComplaint = async (req: Request, res: Response) => {
     try {
@@ -72,8 +72,16 @@ export const getComplaintById = async (req: Request, res: Response) => {
         const complaint = await Complaint.findByPk(req.params.id, {
             include: [
                 {model: Customer, as: "customer"},
-                {model: ComplaintFollowUp, as: "followups"},
-                {model: ComplaintReminder, as: "reminders"},
+                {model: ComplaintFollowUp, as: "followups",
+                    include: [
+                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                    ]
+                },
+                {model: ComplaintReminder, as: "reminders",
+                    include: [
+                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                    ]
+                },
             ],
         });
 
