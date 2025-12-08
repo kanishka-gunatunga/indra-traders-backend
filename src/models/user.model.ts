@@ -57,7 +57,7 @@ export default (sequelize: Sequelize) => {
             },
             department: {
                 type: DataTypes.ENUM("ITPL", "ISP", "IMS", "IFT"),
-                allowNull: false,
+                allowNull: true,
             },
             branch: {
                 type: DataTypes.ENUM("BAMBALAPITIYA", "KANDY", "JAFFNA", "GALLE", "NEGOMBO"),
