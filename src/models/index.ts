@@ -38,6 +38,7 @@ import VehicleSaleHistoryModel from "./vehicleSaleHistory.model";
 import SparePartSaleHistoryModel from "./sparePartSaleHistory.model";
 import ServiceParkSaleHistoryModel from "./serviceParkSaleHistory.model";
 import FastTrackSaleHistoryModel from "./fastTrackSaleHistory.model";
+import LeasingBankModel from "./leasingBank.model";
 
 const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
     host: dbConfig.HOST,
@@ -90,6 +91,7 @@ const VehicleSaleHistory = VehicleSaleHistoryModel(sequelize);
 const SparePartSaleHistory = SparePartSaleHistoryModel(sequelize);
 const ServiceParkSaleHistory = ServiceParkSaleHistoryModel(sequelize);
 const FastTrackSaleHistory = FastTrackSaleHistoryModel(sequelize);
+const LeasingBank = LeasingBankModel(sequelize);
 
 interface DB {
     Sequelize: typeof Sequelize;
@@ -131,6 +133,7 @@ interface DB {
     SparePartSaleHistory: typeof SparePartSaleHistory;
     ServiceParkSaleHistory: typeof ServiceParkSaleHistory;
     FastTrackSaleHistory: typeof FastTrackSaleHistory;
+    LeasingBank: typeof LeasingBank;
 }
 
 
@@ -191,6 +194,8 @@ db.ChatMessage = ChatMessage;
 db.ChatSession = ChatSession;
 
 db.Otp = Otp;
+
+db.LeasingBank = LeasingBank;
 
 
 db.Customer.hasMany(db.Complaint, {foreignKey: "customerId", as: "complaints"});

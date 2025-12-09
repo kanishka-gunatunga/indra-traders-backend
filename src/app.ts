@@ -24,6 +24,7 @@ import chatRoutes from "./routes/chat.routes";
 
 import {handleFacebookMessage} from "./realtime/facebook";
 import path from "path";
+import leasingBankRoutes from "./routes/leasingBank.routes";
 
 const app = express();
 
@@ -98,5 +99,6 @@ app.use("/api/v1/fast-track", fastTrackRoutes);
 app.use("/api/v1/service-park", serviceParkRoutes);
 app.use("/api/v1/unavailable", unavailableRoutes);
 app.use("/api/v1/chat", chatRoutes);
+app.use("/api/v1/leasing-banks", leasingBankRoutes);
 
 export default app;
