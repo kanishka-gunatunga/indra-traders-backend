@@ -1588,7 +1588,6 @@
 // }
 
 
-
 //with OpenAi and LangChain Agent
 // import { Server, Socket } from "socket.io";
 // import db from "../models";
@@ -2119,20 +2118,21 @@
 // }
 
 
-import { Server, Socket } from "socket.io";
+import {Server, Socket} from "socket.io";
 import db from "../models";
-import { Pinecone } from "@pinecone-database/pinecone";
-import { FeatureExtractionPipeline, pipeline } from "@xenova/transformers";
-import { QueryTypes } from "sequelize";
-import { TranslateService } from "../services/translate";
+import {Pinecone} from "@pinecone-database/pinecone";
+import {FeatureExtractionPipeline, pipeline} from "@xenova/transformers";
+import {QueryTypes} from "sequelize";
+import {TranslateService} from "../services/translate";
 
 
-import { ChatOpenAI } from "@langchain/openai";
-import { DynamicStructuredTool } from "@langchain/core/tools";
-import { z } from "zod";
-import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
-import { createAgent } from "langchain";
-import { ChatSession } from "../models/chatSession.model";
+import {ChatOpenAI} from "@langchain/openai";
+import {DynamicStructuredTool} from "@langchain/core/tools";
+import {z} from "zod";
+import {HumanMessage, AIMessage, BaseMessage} from "@langchain/core/messages";
+import {createAgent} from "langchain";
+import {ChatSession} from "../models/chatSession.model";
+import {WahaService} from "../services/waha";
 
 
 type AgentPresence = {
@@ -2157,7 +2157,7 @@ interface BotResponse {
     action?: 'offer_agent' | 'offer_register';
 }
 
-const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY! });
+const pinecone = new Pinecone({apiKey: process.env.PINECONE_API_KEY!});
 
 const llm = new ChatOpenAI({
     apiKey: process.env.OPENAI_API_KEY,
@@ -2180,7 +2180,7 @@ export async function getGeneralContext(query: string): Promise<string> {
     try {
         const pipeline = await getEmbedder();
 
-        const result = await pipeline(query, { pooling: 'mean', normalize: true });
+        const result = await pipeline(query, {pooling: 'mean', normalize: true});
         const queryEmbedding = Array.from(result.data as number[]);
 
         const index = pinecone.index(process.env.PINECONE_INDEX!);
@@ -2285,7 +2285,7 @@ const queryDatabase = async (userQuestion: string) => {
         }
 
         console.log("Executing SQL:", sqlQuery);
-        const results = await db.sequelize.query(sqlQuery, { type: QueryTypes.SELECT });
+        const results = await db.sequelize.query(sqlQuery, {type: QueryTypes.SELECT});
 
         if (!results || results.length === 0) {
             return "No records found in the database matching that criteria.";
@@ -2301,11 +2301,11 @@ const queryDatabase = async (userQuestion: string) => {
 
 export async function processBotMessage(chat_id: string, userText: string): Promise<BotResponse> {
     try {
-        const session = await db.ChatSession.findOne({ where: { chat_id } });
-        if (!session) return { type: 'text', content: "Session expired." };
+        const session = await db.ChatSession.findOne({where: {chat_id}});
+        if (!session) return {type: 'text', content: "Session expired."};
 
         const history = await db.ChatMessage.findAll({
-            where: { chat_id },
+            where: {chat_id},
             order: [["createdAt", "DESC"]],
             limit: 8
         });
@@ -2313,15 +2313,15 @@ export async function processBotMessage(chat_id: string, userText: string): Prom
         const vectorTool = new DynamicStructuredTool({
             name: "get_general_company_info",
             description: "PRIMARY SOURCE: Use this to check if a question is related to Indra Traders, services, locations, or policies.",
-            schema: z.object({ query: z.string().describe("The specific search topic") }),
-            func: async ({ query }) => await getGeneralContext(query),
+            schema: z.object({query: z.string().describe("The specific search topic")}),
+            func: async ({query}) => await getGeneralContext(query),
         });
 
         const handoffTool = new DynamicStructuredTool({
             name: "transfer_to_live_agent",
             description: "Use this if the user explicitly asks for a human, agent, or support.",
-            schema: z.object({ reason: z.string() }),
-            func: async ({ reason }) => {
+            schema: z.object({reason: z.string()}),
+            func: async ({reason}) => {
                 return "HANDOFF_TRIGGERED_ACTION";
             },
         });
@@ -2329,8 +2329,8 @@ export async function processBotMessage(chat_id: string, userText: string): Prom
         const dbTool = new DynamicStructuredTool({
             name: "check_vehicle_inventory",
             description: "Queries the SQL database for vehicle stock/prices, spare parts details.",
-            schema: z.object({ question: z.string().describe("User question about stock") }),
-            func: async ({ question }) => await queryDatabase(question),
+            schema: z.object({question: z.string().describe("User question about stock")}),
+            func: async ({question}) => await queryDatabase(question),
         });
 
         const tools: any[] = [vectorTool, handoffTool];
@@ -2380,7 +2380,7 @@ export async function processBotMessage(chat_id: string, userText: string): Prom
 
         if (isHandoffTriggered) {
             console.log("🚀 Handoff Signal Detected via Tool Output");
-            return { type: 'handoff', content: "I am connecting you to a live agent now..." };
+            return {type: 'handoff', content: "I am connecting you to a live agent now..."};
         }
 
         const lastMessage = messages[messages.length - 1];
@@ -2390,20 +2390,19 @@ export async function processBotMessage(chat_id: string, userText: string): Prom
 
         if (outputText.includes("browsing as a Guest") || outputText.includes("Please register")) {
             action = 'offer_register';
-        }
-        else if (outputText.toLowerCase().includes("speak to a live agent") || outputText.toLowerCase().includes("contact a live agent")) {
+        } else if (outputText.toLowerCase().includes("speak to a live agent") || outputText.toLowerCase().includes("contact a live agent")) {
             action = 'offer_agent';
         }
 
         if (outputText.toLowerCase().includes("connecting you to a live agent")) {
-            return { type: 'handoff', content: "I am connecting you to a live agent now..." };
+            return {type: 'handoff', content: "I am connecting you to a live agent now..."};
         }
 
-        return { type: 'text', content: outputText, action };
+        return {type: 'text', content: outputText, action};
 
     } catch (error) {
         console.error("❌ Agent Runtime Error:", error);
-        return { type: 'text', content: "I apologize, I encountered a temporary system error. Please try again." };
+        return {type: 'text', content: "I apologize, I encountered a temporary system error. Please try again."};
     }
 }
 
@@ -2570,10 +2569,34 @@ export default function initSocket(io: Server) {
                 attachment_type: attachment?.type || "none",
                 file_name: attachment?.name || null,
             });
-            await db.ChatSession.update(
-                {last_message_at: new Date(), unread_count: 0},
-                {where: {chat_id}}
-            );
+
+            const session = await db.ChatSession.findOne({where: {chat_id}});
+
+            if (session) {
+                await session.update({
+                    last_message_at: new Date(), unread_count: 0
+                });
+
+                if (session.channel === 'WhatsApp') {
+
+                    let targetNumber = session.customer_contact;
+
+                    if (!targetNumber || targetNumber.length < 5) {
+                        targetNumber = session.chat_id;
+                    }
+
+                    // const wahaId = WahaService.formatPhone(targetNumber);
+
+                    const wahaId = `${targetNumber}@c.us`;
+                    await WahaService.sendText(wahaId, text);
+                    console.log(`[Agent->WhatsApp] Replied to ${chat_id}`);
+                }
+            }
+
+            // await db.ChatSession.update(
+            //     {last_message_at: new Date(), unread_count: 0},
+            //     {where: {chat_id}}
+            // );
             io.to(chatRoom(chat_id)).emit("message.new", msg);
         });
 
@@ -2613,8 +2636,15 @@ export default function initSocket(io: Server) {
         socket.on("chat.close", async ({chat_id}: { chat_id: string }) => {
             const session = await db.ChatSession.findOne({where: {chat_id}});
             if (!session) return;
-            await session.update({status: "closed"});
+
+            if (session.channel === 'WhatsApp') {
+                await session.update({status: "closed", agent_id: null});
+            } else {
+                await session.update({status: "closed"});
+            }
+
             io.to(chatRoom(chat_id)).emit("chat.closed");
+            console.log(`Chat ${chat_id} closed by agent.`);
         });
 
         socket.on("disconnect", () => {
