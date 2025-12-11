@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  waha:
+    image: devlikeapro/waha:latest
+    container_name: waha
+    restart: always
+    # Expose the API port
+    ports:
+      - "3000:3000"
+    environment:
+      # Print QR code in terminal logs (Easier for setup)
+      - WHATSAPP_DEFAULT_ENGINE=WEBJS  # Uses whatsapp-web.js (Stable for basic use)
+      - WAHA_PRINT_QR=True
+      # Security: Set a simple API key so random people can't use your API
+      - WAHA_API_KEY=secret_key_123
+      # Webhook: Where WAHA sends incoming messages (Your Express Backend)
+      # Replace 'host.docker.internal' with your actual backend URL in production
+      - WAHA_WEBHOOK_URL=http://host.docker.internal:8081/api/webhook/waha
+      # Use the 'local' session storage so you don't scan QR every restart
+      - WAHA_WORKER_STORAGE=local
+    volumes:
+      # Persist session data (so you stay logged in after restart)
+      - ./waha-sessions:/app/.waha/sessions
