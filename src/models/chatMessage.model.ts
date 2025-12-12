@@ -110,7 +110,10 @@ export default (sequelize: Sequelize) => {
     ChatMessage.init(
         {
             id: {type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true},
-            chat_id: {type: DataTypes.STRING, allowNull: false},
+            chat_id: {
+                type: DataTypes.STRING(255),
+                allowNull: false
+            },
             sender: {type: DataTypes.ENUM("customer", "bot", "agent", "system"), allowNull: false},
             message: {type: DataTypes.TEXT, allowNull: true},
             attachment_url: {type: DataTypes.STRING, allowNull: true},
