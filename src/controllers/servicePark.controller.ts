@@ -10,7 +10,13 @@ const {
     User,
     ServiceParkSaleFollowUp,
     ServiceParkSaleReminder,
-    ServiceParkSaleHistory
+    ServiceParkSaleHistory,
+    Service,
+    Branch,
+    ServiceLine,
+    BranchService,
+    Package,
+    PackageService
 } = db;
 
 
@@ -769,5 +775,157 @@ export const updatePriority = async (req: Request, res: Response) => {
     } catch (err) {
         console.error("updatePriority error:", err);
         res.status(500).json({message: "Server error"});
+    }
+};
+
+
+
+
+// --- SERVICES MANAGEMENT ---
+
+export const createService = async (req: Request, res: Response) => {
+    try {
+        const { name, type, description, base_price } = req.body;
+        const service = await Service.create({ name, type, description, base_price });
+        return res.status(http.CREATED).json({ message: "Service created", service });
+    } catch (error: any) {
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error creating service", error: error.message });
+    }
+};
+
+export const getAllServices = async (req: Request, res: Response) => {
+    try {
+        const services = await Service.findAll();
+        return res.status(http.OK).json(services);
+    } catch (error) {
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching services" });
+    }
+};
+
+// --- PACKAGE MANAGEMENT ---
+
+export const createPackage = async (req: Request, res: Response) => {
+    const t = await db.sequelize.transaction();
+    try {
+        const { name, description, serviceIds } = req.body; // serviceIds = [1, 2, 5]
+
+        // 1. Calculate total price from Base Prices of services
+        const services = await Service.findAll({
+            where: { id: serviceIds }
+        });
+
+        if (!services || services.length === 0) {
+            await t.rollback();
+            return res.status(http.BAD_REQUEST).json({ message: "No valid services provided" });
+        }
+
+        const totalPrice = services.reduce((sum: number, svc: any) => sum + Number(svc.base_price), 0);
+
+        // 2. Create Package
+        const newPackage = await Package.create({
+            name,
+            description,
+            total_price: totalPrice
+        }, { transaction: t });
+
+        // 3. Associate Services
+        await (newPackage as any).addServices(serviceIds, { transaction: t });
+
+        await t.commit();
+        return res.status(http.CREATED).json({ message: "Package created", package: newPackage });
+    } catch (error: any) {
+        await t.rollback();
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error creating package", error: error.message });
+    }
+};
+
+// --- BRANCH MANAGEMENT ---
+
+export const createBranch = async (req: Request, res: Response) => {
+    try {
+        const { name, location_code, contact_number, address } = req.body;
+        const branch = await Branch.create({ name, location_code, contact_number, address, is_active: true });
+        return res.status(http.CREATED).json({ message: "Branch created", branch });
+    } catch (error: any) {
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error creating branch", error: error.message });
+    }
+};
+
+export const listBranches = async (req: Request, res: Response) => {
+    try {
+        const branches = await Branch.findAll();
+        return res.status(http.OK).json(branches);
+    } catch (error) {
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching branches" });
+    }
+};
+
+// --- VIEW BRANCH DETAILS (The "View More" functionality) ---
+export const getBranchDetails = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const branch = await Branch.findByPk(id, {
+            include: [
+                {
+                    model: Service,
+                    as: "services",
+                    through: { attributes: ["price", "is_available"] } // Get the custom price
+                },
+                {
+                    model: ServiceLine,
+                    as: "serviceLines",
+                }
+            ]
+        });
+
+        if (!branch) return res.status(http.NOT_FOUND).json({ message: "Branch not found" });
+        return res.status(http.OK).json(branch);
+    } catch (error: any) {
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching details", error: error.message });
+    }
+};
+
+// --- ASSIGN SERVICE TO BRANCH (With Custom Price) ---
+export const addServiceToBranch = async (req: Request, res: Response) => {
+    try {
+        const { branchId } = req.params;
+        const { service_id, custom_price } = req.body;
+
+        const branch = await Branch.findByPk(branchId);
+        if (!branch) return res.status(http.NOT_FOUND).json({ message: "Branch not found" });
+
+        // Create or Update the junction record
+        // upsert implies: if exists update price, if not create
+        await BranchService.upsert({
+            branch_id: Number(branchId),
+            service_id: service_id,
+            price: custom_price,
+            is_available: true
+        });
+
+        return res.status(http.OK).json({ message: "Service added/updated for branch successfully" });
+    } catch (error: any) {
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error adding service", error: error.message });
+    }
+};
+
+// --- SERVICE LINES (Booths/Bays) ---
+
+export const createServiceLine = async (req: Request, res: Response) => {
+    try {
+        const { branchId } = req.params;
+        const { name, type, advisor } = req.body;
+
+        const line = await ServiceLine.create({
+            branch_id: Number(branchId),
+            name,
+            type,
+            advisor,
+            status: "ACTIVE"
+        });
+
+        return res.status(http.CREATED).json({ message: "Service Line created", line });
+    } catch (error: any) {
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error creating service line", error: error.message });
     }
 };
