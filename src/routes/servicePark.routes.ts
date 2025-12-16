@@ -51,17 +51,16 @@ router.get("/packages", getAllPackages);
 router.put("/packages/:id", updatePackage);
 router.delete("/packages/:id", deletePackage);
 
-// Branch Management
+
 router.post("/branches", createBranch);
 router.get("/branches", listBranches);
-router.get("/branches/:id", getBranchDetails); // View More functionality
+router.get("/branches/:id", getBranchDetails);
 
 router.put("/branches/:id", updateBranch);
 router.delete("/branches/:id", deleteBranch);
 
-// Branch Specific Config
-router.post("/branches/:branchId/services", addServiceToBranch); // Add price to service in branch
-router.post("/branches/:branchId/lines", createServiceLine); // Add booth/line with advisor
+router.post("/branches/:branchId/services", addServiceToBranch);
+router.post("/branches/:branchId/lines", createServiceLine);
 
 
 router.get("/sales/:ticketNumber", getSaleDetailsByTicket);
