@@ -45,6 +45,7 @@ import BranchModel from "./branch.model";
 import BranchServiceModel from "./branchService.model";
 import PackageServiceModel from "./packageService.model";
 import ServiceLineModel from "./serviceLine.model";
+import BranchUnavailableDateModel from "./branchUnavailableDate.model";
 
 const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
     host: dbConfig.HOST,
@@ -104,6 +105,7 @@ const Branch = BranchModel(sequelize);
 const BranchService = BranchServiceModel(sequelize);
 const PackageService = PackageServiceModel(sequelize);
 const ServiceLine = ServiceLineModel(sequelize);
+const BranchUnavailableDate = BranchUnavailableDateModel(sequelize);
 
 interface DB {
     Sequelize: typeof Sequelize;
@@ -152,7 +154,7 @@ interface DB {
     BranchService: typeof BranchService;
     PackageService: typeof PackageService;
     ServiceLine: typeof ServiceLine;
-
+    BranchUnavailableDate: typeof BranchUnavailableDate;
 }
 
 
@@ -209,6 +211,7 @@ db.PackageService = PackageService;
 db.Package = Package;
 db.Branch = Branch;
 db.BranchService = BranchService;
+db.BranchUnavailableDate = BranchUnavailableDate;
 
 
 // unavailable
@@ -448,14 +451,37 @@ db.ServiceParkSaleReminder.belongsTo(db.User, {
 });
 
 
-db.Branch.belongsToMany(db.Service, {through: db.BranchService, foreignKey: 'branch_id', as: 'services'});
-db.Service.belongsToMany(db.Branch, {through: db.BranchService, foreignKey: 'service_id', as: 'branches'});
+// db.Branch.belongsToMany(db.Service, {through: db.BranchService, foreignKey: 'branch_id', as: 'services'});
+db.Branch.belongsToMany(db.Service, {
+    through: db.BranchService,
+    foreignKey: 'branch_id',
+    otherKey: 'service_id',
+    as: 'services'
+});
+// db.Service.belongsToMany(db.Branch, {through: db.BranchService, foreignKey: 'service_id', as: 'branches'});
+db.Service.belongsToMany(db.Branch, {
+    through: db.BranchService,
+    foreignKey: 'service_id',
+    otherKey: 'branch_id',
+    as: 'branches'
+});
 
 db.Package.belongsToMany(db.Service, {through: db.PackageService, foreignKey: 'package_id', as: 'services'});
 db.Service.belongsToMany(db.Package, {through: db.PackageService, foreignKey: 'service_id', as: 'packages'});
 
 db.Branch.hasMany(db.ServiceLine, {foreignKey: 'branch_id', as: 'serviceLines'});
 db.ServiceLine.belongsTo(db.Branch, {foreignKey: 'branch_id', as: 'branch'});
+
+db.Branch.hasMany(db.BranchUnavailableDate, {
+    foreignKey: 'branch_id',
+    as: 'unavailableDates',
+    onDelete: 'CASCADE'
+});
+
+db.BranchUnavailableDate.belongsTo(db.Branch, {
+    foreignKey: 'branch_id',
+    as: 'branch'
+});
 
 
 // unavailable items

@@ -16,7 +16,8 @@ const {
     ServiceLine,
     BranchService,
     Package,
-    PackageService
+    PackageService,
+    BranchUnavailableDate
 } = db;
 
 
@@ -779,17 +780,15 @@ export const updatePriority = async (req: Request, res: Response) => {
 };
 
 
-
-
 // --- SERVICES MANAGEMENT ---
 
 export const createService = async (req: Request, res: Response) => {
     try {
-        const { name, type, description, base_price } = req.body;
-        const service = await Service.create({ name, type, description, base_price });
-        return res.status(http.CREATED).json({ message: "Service created", service });
+        const {name, type, description, base_price} = req.body;
+        const service = await Service.create({name, type, description, base_price});
+        return res.status(http.CREATED).json({message: "Service created", service});
     } catch (error: any) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error creating service", error: error.message });
+        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error creating service", error: error.message});
     }
 };
 
@@ -798,7 +797,7 @@ export const getAllServices = async (req: Request, res: Response) => {
         const services = await Service.findAll();
         return res.status(http.OK).json(services);
     } catch (error) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching services" });
+        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error fetching services"});
     }
 };
 
@@ -807,47 +806,97 @@ export const getAllServices = async (req: Request, res: Response) => {
 export const createPackage = async (req: Request, res: Response) => {
     const t = await db.sequelize.transaction();
     try {
-        const { name, description, serviceIds } = req.body; // serviceIds = [1, 2, 5]
+        const {name, short_description ,description, serviceIds} = req.body; // serviceIds = [1, 2, 5]
 
-        // 1. Calculate total price from Base Prices of services
         const services = await Service.findAll({
-            where: { id: serviceIds }
+            where: {id: serviceIds}
         });
 
         if (!services || services.length === 0) {
             await t.rollback();
-            return res.status(http.BAD_REQUEST).json({ message: "No valid services provided" });
+            return res.status(400).json({ message: "No valid services selected" });
         }
 
         const totalPrice = services.reduce((sum: number, svc: any) => sum + Number(svc.base_price), 0);
 
-        // 2. Create Package
         const newPackage = await Package.create({
             name,
+            short_description,
             description,
             total_price: totalPrice
         }, { transaction: t });
 
-        // 3. Associate Services
         await (newPackage as any).addServices(serviceIds, { transaction: t });
 
         await t.commit();
-        return res.status(http.CREATED).json({ message: "Package created", package: newPackage });
+        return res.status(201).json({ message: "Package created successfully", package: newPackage });
     } catch (error: any) {
         await t.rollback();
-        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error creating package", error: error.message });
+        console.error("Create Package Error:", error.parent?.sqlMessage || error.message);
+
+        return res.status(500).json({
+            message: "Error creating package",
+            error: error.message,
+            detail: error.parent?.sqlMessage
+        });
     }
 };
 
 // --- BRANCH MANAGEMENT ---
 
 export const createBranch = async (req: Request, res: Response) => {
+    const t = await db.sequelize.transaction();
     try {
-        const { name, location_code, contact_number, address } = req.body;
-        const branch = await Branch.create({ name, location_code, contact_number, address, is_active: true });
-        return res.status(http.CREATED).json({ message: "Branch created", branch });
+        const {
+            name, location_code, contact_number, address, email,
+            unavailable_dates, lines, custom_pricing
+        } = req.body;
+
+        const branch = await Branch.create({
+            name, contact_number, email, address, is_active: true
+        }, { transaction: t });
+
+
+        if (unavailable_dates && unavailable_dates.length > 0) {
+            const dateRecords = unavailable_dates.map((date: string) => ({
+                branch_id: branch.id,
+                date: date,
+                reason: "Initial Setup"
+            }));
+            await BranchUnavailableDate.bulkCreate(dateRecords, { transaction: t });
+        }
+
+        if (lines && lines.length > 0) {
+            const lineRecords = lines.map((line: any) => ({
+                branch_id: branch.id,
+                name: line.name,
+                type: line.type,
+                advisor: line.advisor,
+                status: "ACTIVE"
+            }));
+            await ServiceLine.bulkCreate(lineRecords, { transaction: t });
+        }
+
+        if (custom_pricing && custom_pricing.length > 0) {
+            const serviceRecords = custom_pricing.map((item: any) => ({
+                branch_id: branch.id,
+                service_id: item.service_id,
+                price: item.price,
+                is_available: true
+            }));
+            await BranchService.bulkCreate(serviceRecords, { transaction: t });
+        }
+
+        await t.commit();
+        return res.status(201).json({ message: "Branch fully configured successfully", branch });
     } catch (error: any) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error creating branch", error: error.message });
+        await t.rollback();
+        console.error("Create Branch Error:", error);
+        return res.status(500).json({
+            message: "Error creating branch configuration",
+            error: error.message,
+            detail: error.original?.sqlMessage || "Check server logs"
+        });
     }
 };
 
@@ -856,20 +905,20 @@ export const listBranches = async (req: Request, res: Response) => {
         const branches = await Branch.findAll();
         return res.status(http.OK).json(branches);
     } catch (error) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching branches" });
+        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error fetching branches"});
     }
 };
 
 // --- VIEW BRANCH DETAILS (The "View More" functionality) ---
 export const getBranchDetails = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
+        const {id} = req.params;
         const branch = await Branch.findByPk(id, {
             include: [
                 {
                     model: Service,
                     as: "services",
-                    through: { attributes: ["price", "is_available"] } // Get the custom price
+                    through: {attributes: ["price", "is_available"]} // Get the custom price
                 },
                 {
                     model: ServiceLine,
@@ -878,21 +927,21 @@ export const getBranchDetails = async (req: Request, res: Response) => {
             ]
         });
 
-        if (!branch) return res.status(http.NOT_FOUND).json({ message: "Branch not found" });
+        if (!branch) return res.status(http.NOT_FOUND).json({message: "Branch not found"});
         return res.status(http.OK).json(branch);
     } catch (error: any) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching details", error: error.message });
+        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error fetching details", error: error.message});
     }
 };
 
 // --- ASSIGN SERVICE TO BRANCH (With Custom Price) ---
 export const addServiceToBranch = async (req: Request, res: Response) => {
     try {
-        const { branchId } = req.params;
-        const { service_id, custom_price } = req.body;
+        const {branchId} = req.params;
+        const {service_id, custom_price} = req.body;
 
         const branch = await Branch.findByPk(branchId);
-        if (!branch) return res.status(http.NOT_FOUND).json({ message: "Branch not found" });
+        if (!branch) return res.status(http.NOT_FOUND).json({message: "Branch not found"});
 
         // Create or Update the junction record
         // upsert implies: if exists update price, if not create
@@ -903,9 +952,9 @@ export const addServiceToBranch = async (req: Request, res: Response) => {
             is_available: true
         });
 
-        return res.status(http.OK).json({ message: "Service added/updated for branch successfully" });
+        return res.status(http.OK).json({message: "Service added/updated for branch successfully"});
     } catch (error: any) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error adding service", error: error.message });
+        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error adding service", error: error.message});
     }
 };
 
@@ -913,8 +962,8 @@ export const addServiceToBranch = async (req: Request, res: Response) => {
 
 export const createServiceLine = async (req: Request, res: Response) => {
     try {
-        const { branchId } = req.params;
-        const { name, type, advisor } = req.body;
+        const {branchId} = req.params;
+        const {name, type, advisor} = req.body;
 
         const line = await ServiceLine.create({
             branch_id: Number(branchId),
@@ -924,8 +973,220 @@ export const createServiceLine = async (req: Request, res: Response) => {
             status: "ACTIVE"
         });
 
-        return res.status(http.CREATED).json({ message: "Service Line created", line });
+        return res.status(http.CREATED).json({message: "Service Line created", line});
     } catch (error: any) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error creating service line", error: error.message });
+        return res.status(http.INTERNAL_SERVER_ERROR).json({
+            message: "Error creating service line",
+            error: error.message
+        });
+    }
+};
+
+
+export const updateService = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { name, type, base_price } = req.body;
+
+        const service = await Service.findByPk(id);
+        if (!service) return res.status(404).json({ message: "Service not found" });
+
+        await service.update({ name, type, base_price });
+        return res.status(200).json({ message: "Service updated", service });
+    } catch (error: any) {
+        return res.status(500).json({ message: "Error updating service", error: error.message });
+    }
+};
+
+export const deleteService = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const deleted = await Service.destroy({ where: { id } });
+        if (!deleted) return res.status(404).json({ message: "Service not found" });
+        return res.status(200).json({ message: "Service deleted successfully" });
+    } catch (error: any) {
+        return res.status(500).json({ message: "Error deleting service", error: error.message });
+    }
+};
+
+export const getAllPackages = async (req: Request, res: Response) => {
+    try {
+        const packages = await Package.findAll({
+            include: [{
+                model: Service,
+                as: 'services',
+                through: { attributes: [] } // Don't return junction table data, just the services
+            }]
+        });
+        return res.status(200).json(packages);
+    } catch (error: any) {
+        return res.status(500).json({ message: "Error fetching packages", error: error.message });
+    }
+};
+
+export const updatePackage = async (req: Request, res: Response) => {
+    const t = await db.sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const { name, short_description, description, serviceIds } = req.body;
+
+        const pkg = await Package.findByPk(id);
+        if (!pkg) {
+            await t.rollback();
+            return res.status(404).json({ message: "Package not found" });
+        }
+
+        // 1. Calculate new total price if services are changing
+        let totalPrice = pkg.total_price;
+        if (serviceIds) {
+            const services = await Service.findAll({ where: { id: serviceIds } });
+            if (!services.length) {
+                await t.rollback();
+                return res.status(400).json({ message: "No valid services provided" });
+            }
+            totalPrice = services.reduce((sum: number, s: any) => sum + Number(s.base_price), 0);
+        }
+
+        // 2. Update Package details
+        await pkg.update({
+            name,
+            short_description,
+            description,
+            total_price: totalPrice
+        }, { transaction: t });
+
+        // 3. Sync Associations (Replace old services with new list)
+        if (serviceIds) {
+            // Sequelize 'setServices' automatically handles the junction table
+            await (pkg as any).setServices(serviceIds, { transaction: t });
+        }
+
+        await t.commit();
+
+        // Return refreshed data
+        const updatedPkg = await Package.findByPk(id, { include: ['services'] });
+        return res.status(200).json({ message: "Package updated", package: updatedPkg });
+
+    } catch (error: any) {
+        await t.rollback();
+        console.error("Update Package Error:", error);
+        return res.status(500).json({ message: "Error updating package", error: error.message });
+    }
+};
+
+export const deletePackage = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const deleted = await Package.destroy({ where: { id } });
+        if (!deleted) return res.status(404).json({ message: "Package not found" });
+        return res.status(200).json({ message: "Package deleted successfully" });
+    } catch (error: any) {
+        return res.status(500).json({ message: "Error deleting package", error: error.message });
+    }
+};
+
+
+export const updateBranch = async (req: Request, res: Response) => {
+    const t = await db.sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const {
+            name, contact_number, address, email,
+            unavailable_dates, lines, custom_pricing
+        } = req.body;
+
+        const branch = await Branch.findByPk(id);
+        if (!branch) {
+            await t.rollback();
+            return res.status(404).json({ message: "Branch not found" });
+        }
+
+        // 1. Update Basic Info
+        await branch.update({
+            name, contact_number, address, email
+        }, { transaction: t });
+
+        // 2. Sync Unavailable Dates (Destroy all for this branch, re-insert new list)
+        if (unavailable_dates) {
+            await BranchUnavailableDate.destroy({ where: { branch_id: id }, transaction: t });
+
+            if (unavailable_dates.length > 0) {
+                const dateRecords = unavailable_dates.map((date: string) => ({
+                    branch_id: id,
+                    date: date,
+                    reason: "Unavailable" // Or pass reason from frontend if extended
+                }));
+                await BranchUnavailableDate.bulkCreate(dateRecords, { transaction: t });
+            }
+        }
+
+        // 3. Sync Service Lines (Smart Sync)
+        if (lines) {
+            // Strategy: Delete lines not in the new list (if logic allows) or simpler:
+            // For full update, we often wipe and recreate OR update existing by ID.
+            // Here, for robustness, we will destroy old lines and recreate to ensure state matches UI.
+            // NOTE: If you need to preserve Line IDs for appointment history, use an UPSERT strategy instead.
+            await ServiceLine.destroy({ where: { branch_id: id }, transaction: t });
+
+            if (lines.length > 0) {
+                const lineRecords = lines.map((line: any) => ({
+                    branch_id: id,
+                    name: line.name,
+                    type: line.type,
+                    advisor: line.advisor,
+                    status: "ACTIVE"
+                }));
+                await ServiceLine.bulkCreate(lineRecords, { transaction: t });
+            }
+        }
+
+        // 4. Sync Custom Pricing
+        if (custom_pricing) {
+            await BranchService.destroy({ where: { branch_id: id }, transaction: t });
+
+            if (custom_pricing.length > 0) {
+                const serviceRecords = custom_pricing.map((item: any) => ({
+                    branch_id: id,
+                    service_id: item.service_id,
+                    price: item.price,
+                    is_available: true
+                }));
+                await BranchService.bulkCreate(serviceRecords, { transaction: t });
+            }
+        }
+
+        await t.commit();
+        return res.status(200).json({ message: "Branch updated successfully", branch });
+    } catch (error: any) {
+        await t.rollback();
+        console.error("Update Branch Error:", error);
+        return res.status(500).json({ message: "Error updating branch", error: error.message });
+    }
+};
+
+export const deleteBranch = async (req: Request, res: Response) => {
+    const t = await db.sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const branch = await Branch.findByPk(id);
+
+        if (!branch) {
+            await t.rollback();
+            return res.status(404).json({ message: "Branch not found" });
+        }
+
+        // Clean up related data manually if CASCADE is not set in DB
+        await BranchUnavailableDate.destroy({ where: { branch_id: id }, transaction: t });
+        await BranchService.destroy({ where: { branch_id: id }, transaction: t });
+        await ServiceLine.destroy({ where: { branch_id: id }, transaction: t });
+
+        // Delete Branch
+        await branch.destroy({ transaction: t });
+
+        await t.commit();
+        return res.status(200).json({ message: "Branch deleted successfully" });
+    } catch (error: any) {
+        await t.rollback();
+        return res.status(500).json({ message: "Error deleting branch", error: error.message });
     }
 };
