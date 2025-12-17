@@ -30,7 +30,7 @@ export default (sequelize: Sequelize) => {
             bank_name: {
                 type: DataTypes.STRING(100),
                 allowNull: false,
-                unique: true,
+                // unique: true,
             },
             interest_rate: {
                 type: DataTypes.DECIMAL(5, 2),

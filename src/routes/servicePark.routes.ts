@@ -27,7 +27,8 @@ import {
     updatePackage,
     deleteService,
     deletePackage,
-    getAllPackages, updateBranch, deleteBranch,
+    getAllPackages, updateBranch, deleteBranch, getBranchCatalog,
+    validatePromoCode, getAvailablePromos
 } from "../controllers/servicePark.controller";
 
 const router = Router();
@@ -62,6 +63,11 @@ router.delete("/branches/:id", deleteBranch);
 router.post("/branches/:branchId/services", addServiceToBranch);
 router.post("/branches/:branchId/lines", createServiceLine);
 
+router.get("/branches/:branchId/catalog", getBranchCatalog)
+
+
+router.post("/validate-promo", validatePromoCode);
+router.get("/promos", getAvailablePromos);
 
 router.get("/sales/:ticketNumber", getSaleDetailsByTicket);
 router.put("/sales/:id/status", updateSaleStatus)

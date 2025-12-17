@@ -19,6 +19,8 @@ class Branch extends Model<BranchAttributes, BranchCreationAttributes> implement
     public contact_number!: string;
     public address!: string;
     public is_active!: boolean;
+
+    public services?: any[];
 }
 
 export default (sequelize: Sequelize) => {

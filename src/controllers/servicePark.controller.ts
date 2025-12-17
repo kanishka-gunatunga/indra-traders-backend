@@ -1171,3 +1171,145 @@ export const deleteBranch = async (req: Request, res: Response) => {
         return res.status(500).json({message: "Error deleting branch", error: error.message});
     }
 };
+
+
+export const getBranchCatalog = async (req: Request, res: Response) => {
+    try {
+        const { branchId } = req.params;
+
+        const branchServices = await Branch.findByPk(branchId, {
+            include: [
+                {
+                    model: Service,
+                    as: "services",
+                    attributes: ["id", "name", "type", "description", "base_price"],
+                    through: { attributes: ["price", "is_available"] }
+                }
+            ]
+        });
+
+        if (!branchServices) {
+            return res.status(404).json({ message: "Branch not found" });
+        }
+
+        const packages = await Package.findAll({
+            include: [{
+                model: Service,
+                as: 'services',
+                attributes: ["id", "name", "type", "base_price"]
+            }]
+        });
+
+        const formattedServices = branchServices.services?.map((svc: any) => ({
+            id: svc.id,
+            name: svc.name,
+            type: svc.type,
+            description: svc.description,
+            price: svc.BranchService?.price ? parseFloat(svc.BranchService.price) : parseFloat(svc.base_price),
+            is_package: false
+        })) || [];
+
+        const formattedPackages = packages.map((pkg: any) => ({
+            id: pkg.id,
+            name: pkg.name,
+            description: pkg.description,
+            short_description: pkg.short_description,
+            total_price: parseFloat(pkg.total_price),
+            is_package: true,
+            contents: pkg.services.map((s: any) => ({
+                id: s.id,
+                name: s.name,
+                type: s.type,
+                price: parseFloat(s.base_price)
+            }))
+        }));
+
+        return res.status(200).json({
+            services: formattedServices,
+            packages: formattedPackages
+        });
+
+    } catch (error: any) {
+        console.error("Get Branch Catalog Error:", error);
+        return res.status(500).json({ message: "Error fetching catalog", error: error.message });
+    }
+};
+
+
+const MOCK_PROMOS = [
+    {
+        code: "NEWSERVICE500",
+        discountType: "FIXED",
+        amount: 500,
+        applicableTypes: ["ALL"],
+        description: "Loyalty Discount: 500 LKR off total bill",
+        category: "Indra Traders (ITPL)",
+        points: "500"
+    },
+    {
+        code: "REPAIR10",
+        discountType: "PERCENTAGE",
+        amount: 10,
+        applicableTypes: ["Repair"],
+        description: "10% off on all Repair Services",
+        category: "Seasonal Offer",
+        points: "0"
+    },
+    {
+        code: "PAINT20",
+        discountType: "PERCENTAGE",
+        amount: 20,
+        applicableTypes: ["Paint"],
+        description: "20% off on Painting Jobs",
+        category: "Body Shop Special",
+        points: "200"
+    },
+    {
+        code: "SUMMERPACKAGE",
+        discountType: "FIXED",
+        amount: 1000,
+        applicableTypes: ["Package"],
+        description: "1000 LKR off on any Service Package",
+        category: "Summer Sale",
+        points: "100"
+    }
+];
+
+export const validatePromoCode = async (req: Request, res: Response) => {
+    try {
+        const { code } = req.body;
+        if (!code) return res.status(http.BAD_REQUEST).json({ isValid: false, message: "Required" });
+
+        const normalizedCode = code.toUpperCase().trim();
+
+        const promo = MOCK_PROMOS.find(p => p.code === normalizedCode);
+
+        if (!promo) {
+            return res.status(http.BAD_REQUEST).json({
+                isValid: false,
+                message: "Invalid or expired promo code"
+            });
+        }
+
+        return res.status(http.OK).json({
+            isValid: true,
+            code: promo.code,
+            discountType: promo.discountType,
+            amount: promo.amount,
+            applicableTypes: promo.applicableTypes,
+            description: promo.description
+        });
+
+    } catch (error: any) {
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error", error: error.message });
+    }
+};
+
+
+export const getAvailablePromos = async (req: Request, res: Response) => {
+    try {
+        return res.status(http.OK).json(MOCK_PROMOS);
+    } catch (error: any) {
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching promos" });
+    }
+};
