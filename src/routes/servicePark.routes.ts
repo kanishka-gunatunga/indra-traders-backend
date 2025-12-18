@@ -28,7 +28,8 @@ import {
     deleteService,
     deletePackage,
     getAllPackages, updateBranch, deleteBranch, getBranchCatalog,
-    validatePromoCode, getAvailablePromos
+    validatePromoCode, getAvailablePromos,
+    getMonthlyAvailability, createBooking, getDailySlots
 } from "../controllers/servicePark.controller";
 
 const router = Router();
@@ -63,7 +64,11 @@ router.delete("/branches/:id", deleteBranch);
 router.post("/branches/:branchId/services", addServiceToBranch);
 router.post("/branches/:branchId/lines", createServiceLine);
 
-router.get("/branches/:branchId/catalog", getBranchCatalog)
+router.get("/branches/:branchId/catalog", getBranchCatalog);
+
+router.post('/bookings/', createBooking);
+router.get('/bookings/availability', getMonthlyAvailability);
+router.get('/bookings/daily', getDailySlots);
 
 
 router.post("/validate-promo", validatePromoCode);

@@ -2,6 +2,8 @@ import {Request, Response} from "express";
 import db from "../models";
 import http from "http-status-codes";
 import {Op} from "sequelize";
+import dayjs from "dayjs";
+
 
 const {
     Customer,
@@ -17,7 +19,8 @@ const {
     BranchService,
     Package,
     PackageService,
-    BranchUnavailableDate
+    BranchUnavailableDate,
+    ServiceParkBooking
 } = db;
 
 
@@ -977,7 +980,6 @@ export const createServiceLine = async (req: Request, res: Response) => {
     }
 };
 
-
 export const updateService = async (req: Request, res: Response) => {
     try {
         const {id} = req.params;
@@ -1161,7 +1163,7 @@ export const deleteBranch = async (req: Request, res: Response) => {
         await BranchUnavailableDate.destroy({where: {branch_id: id}, transaction: t});
         await BranchService.destroy({where: {branch_id: id}, transaction: t});
         await ServiceLine.destroy({where: {branch_id: id}, transaction: t});
-        
+
         await branch.destroy({transaction: t});
 
         await t.commit();
@@ -1175,7 +1177,7 @@ export const deleteBranch = async (req: Request, res: Response) => {
 
 export const getBranchCatalog = async (req: Request, res: Response) => {
     try {
-        const { branchId } = req.params;
+        const {branchId} = req.params;
 
         const branchServices = await Branch.findByPk(branchId, {
             include: [
@@ -1183,13 +1185,13 @@ export const getBranchCatalog = async (req: Request, res: Response) => {
                     model: Service,
                     as: "services",
                     attributes: ["id", "name", "type", "description", "base_price"],
-                    through: { attributes: ["price", "is_available"] }
+                    through: {attributes: ["price", "is_available"]}
                 }
             ]
         });
 
         if (!branchServices) {
-            return res.status(404).json({ message: "Branch not found" });
+            return res.status(404).json({message: "Branch not found"});
         }
 
         const packages = await Package.findAll({
@@ -1231,7 +1233,7 @@ export const getBranchCatalog = async (req: Request, res: Response) => {
 
     } catch (error: any) {
         console.error("Get Branch Catalog Error:", error);
-        return res.status(500).json({ message: "Error fetching catalog", error: error.message });
+        return res.status(500).json({message: "Error fetching catalog", error: error.message});
     }
 };
 
@@ -1277,8 +1279,8 @@ const MOCK_PROMOS = [
 
 export const validatePromoCode = async (req: Request, res: Response) => {
     try {
-        const { code } = req.body;
-        if (!code) return res.status(http.BAD_REQUEST).json({ isValid: false, message: "Required" });
+        const {code} = req.body;
+        if (!code) return res.status(http.BAD_REQUEST).json({isValid: false, message: "Required"});
 
         const normalizedCode = code.toUpperCase().trim();
 
@@ -1301,7 +1303,7 @@ export const validatePromoCode = async (req: Request, res: Response) => {
         });
 
     } catch (error: any) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error", error: error.message });
+        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error", error: error.message});
     }
 };
 
@@ -1310,6 +1312,139 @@ export const getAvailablePromos = async (req: Request, res: Response) => {
     try {
         return res.status(http.OK).json(MOCK_PROMOS);
     } catch (error: any) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching promos" });
+        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error fetching promos"});
+    }
+};
+
+
+const TOTAL_SLOTS = 18;
+
+export const getMonthlyAvailability = async (req: Request, res: Response) => {
+    try {
+        const branchId = Number(req.query.branchId);
+        const serviceLineId = Number(req.query.serviceLineId);
+        const month = req.query.month as string;
+
+        if (!branchId || !serviceLineId || !month) {
+            return res.status(http.BAD_REQUEST).json({message: "Missing params"});
+        }
+
+        const startOfMonth = dayjs(month as string).startOf('month').format('YYYY-MM-DD');
+        const endOfMonth = dayjs(month as string).endOf('month').format('YYYY-MM-DD');
+
+        const unavailable = await BranchUnavailableDate.findAll({
+            where: {
+                branch_id: Number(branchId),
+                date: {[Op.between]: [startOfMonth, endOfMonth]}
+            },
+            attributes: ['date', 'reason']
+        });
+
+        const bookings = await ServiceParkBooking.findAll({
+            where: {
+                branch_id: branchId,
+                service_line_id: serviceLineId,
+                booking_date: {[Op.between]: [startOfMonth, endOfMonth]},
+                status: {[Op.ne]: 'CANCELLED'}
+            },
+            attributes: ['booking_date', [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'count']],
+            group: ['booking_date']
+        });
+
+        const dots: Record<string, string[]> = {};
+
+        bookings.forEach((b: any) => {
+            const date = b.getDataValue('booking_date');
+            const count = parseInt(b.getDataValue('count'), 10);
+
+            if (count >= TOTAL_SLOTS) {
+                dots[date] = ['red'];
+            } else if (count > 0) {
+                dots[date] = ['orange', 'green'];
+            } else {
+                dots[date] = ['green'];
+            }
+        });
+
+        return res.status(http.OK).json({
+            unavailableDates: unavailable,
+            dots
+        });
+
+    } catch (error: any) {
+        return res.status(http.INTERNAL_SERVER_ERROR).json({error: error.message});
+    }
+};
+
+export const getDailySlots = async (req: Request, res: Response) => {
+    try {
+        const branchId = Number(req.query.branchId);
+        const serviceLineId = Number(req.query.serviceLineId);
+        const date = req.query.date as string;
+
+        if (!branchId || !serviceLineId || !date) {
+            return res.status(http.BAD_REQUEST).json({message: "Missing params"});
+        }
+
+        const bookings = await ServiceParkBooking.findAll({
+            where: {
+                branch_id: branchId,
+                service_line_id: serviceLineId,
+                booking_date: date,
+                status: {[Op.ne]: 'CANCELLED'}
+            }
+        });
+
+        return res.status(http.OK).json(bookings);
+    } catch (error: any) {
+        return res.status(http.INTERNAL_SERVER_ERROR).json({error: error.message});
+    }
+};
+
+export const createBooking = async (req: Request, res: Response) => {
+    const t = await db.sequelize.transaction();
+    try {
+        const {branch_id, service_line_id, booking_date, slots, customer_id, vehicle_no} = req.body;
+
+
+        const branchIdNum = Number(branch_id);
+        const lineIdNum = Number(service_line_id);
+
+        const times = slots.map((s: any) => s.start);
+        const existing = await ServiceParkBooking.findAll({
+            where: {
+                branch_id: branchIdNum,
+                service_line_id: lineIdNum,
+                booking_date,
+                start_time: {[Op.in]: times},
+                status: {[Op.ne]: 'CANCELLED'}
+            },
+            transaction: t
+        });
+
+        if (existing.length > 0) {
+            await t.rollback();
+            return res.status(http.CONFLICT).json({message: "Some slots were just booked by another user."});
+        }
+
+        const bookingRecords = slots.map((slot: any) => ({
+            branch_id: branchIdNum,
+            service_line_id: lineIdNum,
+            booking_date,
+            start_time: slot.start,
+            end_time: slot.end,
+            status: "BOOKED",
+            customer_id,
+            // vehicle_no
+        }));
+
+        await ServiceParkBooking.bulkCreate(bookingRecords, {transaction: t});
+
+        await t.commit();
+        return res.status(http.CREATED).json({message: "Booking confirmed"});
+
+    } catch (error: any) {
+        await t.rollback();
+        return res.status(http.INTERNAL_SERVER_ERROR).json({error: error.message});
     }
 };

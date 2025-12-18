@@ -49,7 +49,8 @@ export default (sequelize: Sequelize) => {
             },
             vehicle_no: {
                 type: DataTypes.STRING(50),
-                allowNull: false
+                allowNull: false,
+                unique: true,
             },
             odometer: {
                 type: DataTypes.INTEGER,

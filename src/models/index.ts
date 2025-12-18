@@ -46,6 +46,7 @@ import BranchServiceModel from "./branchService.model";
 import PackageServiceModel from "./packageService.model";
 import ServiceLineModel from "./serviceLine.model";
 import BranchUnavailableDateModel from "./branchUnavailableDate.model";
+import ServiceParkBookingModel from "./serviceParkBooking.model";
 
 const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
     host: dbConfig.HOST,
@@ -106,6 +107,7 @@ const BranchService = BranchServiceModel(sequelize);
 const PackageService = PackageServiceModel(sequelize);
 const ServiceLine = ServiceLineModel(sequelize);
 const BranchUnavailableDate = BranchUnavailableDateModel(sequelize);
+const ServiceParkBooking = ServiceParkBookingModel(sequelize);
 
 interface DB {
     Sequelize: typeof Sequelize;
@@ -155,6 +157,7 @@ interface DB {
     PackageService: typeof PackageService;
     ServiceLine: typeof ServiceLine;
     BranchUnavailableDate: typeof BranchUnavailableDate;
+    ServiceParkBooking: typeof ServiceParkBooking;
 }
 
 
@@ -212,6 +215,8 @@ db.Package = Package;
 db.Branch = Branch;
 db.BranchService = BranchService;
 db.BranchUnavailableDate = BranchUnavailableDate;
+
+db.ServiceParkBooking = ServiceParkBooking;
 
 
 // unavailable
@@ -481,6 +486,56 @@ db.Branch.hasMany(db.BranchUnavailableDate, {
 db.BranchUnavailableDate.belongsTo(db.Branch, {
     foreignKey: 'branch_id',
     as: 'branch'
+});
+
+// db.ServiceParkBooking.belongsTo(db.Branch, {
+//     foreignKey: 'branch_id',
+//     as: 'branch'
+// });
+// db.Branch.hasMany(db.ServiceParkBooking, {
+//     foreignKey: 'branch_id',
+//     as: 'bookings'
+// });
+//
+// db.ServiceParkBooking.belongsTo(db.ServiceLine, {
+//     foreignKey: 'service_line_id',
+//     as: 'serviceLine'
+// });
+//
+// db.ServiceLine.hasMany(db.ServiceParkBooking, {
+//     foreignKey: 'service_line_id',
+//     as: 'bookings'
+// });
+//
+// db.ServiceParkBooking.belongsTo(db.Customer, {
+//     foreignKey: 'customer_id',
+//     as: 'customer'
+// });
+// db.Customer.hasMany(db.ServiceParkBooking, {
+//     foreignKey: 'customer_id',
+//     as: 'bookings'
+// });
+
+
+db.ServiceParkBooking.belongsTo(db.Branch, {foreignKey: 'branch_id'});
+db.Branch.hasMany(db.ServiceParkBooking, {foreignKey: 'branch_id'});
+
+db.ServiceParkBooking.belongsTo(db.ServiceLine, {foreignKey: 'service_line_id'});
+db.ServiceLine.hasMany(db.ServiceParkBooking, {foreignKey: 'service_line_id'});
+
+db.ServiceParkBooking.belongsTo(db.Customer, {foreignKey: 'customer_id'});
+db.Customer.hasMany(db.ServiceParkBooking, {foreignKey: 'customer_id'});
+
+
+db.ServiceParkBooking.belongsTo(db.ServiceParkVehicleHistory, {
+    foreignKey: 'vehicle_no',
+    targetKey: 'vehicle_no',
+    as: 'vehicle'
+});
+db.ServiceParkVehicleHistory.hasMany(db.ServiceParkBooking, {
+    foreignKey: 'vehicle_no',
+    sourceKey: 'vehicle_no',
+    as: 'bookings'
 });
 
 
