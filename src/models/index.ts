@@ -47,6 +47,8 @@ import PackageServiceModel from "./packageService.model";
 import ServiceLineModel from "./serviceLine.model";
 import BranchUnavailableDateModel from "./branchUnavailableDate.model";
 import ServiceParkBookingModel from "./serviceParkBooking.model";
+import NotificationModel from "./notification.model";
+import ActivityLogModel from "./activityLog.model";
 
 const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
     host: dbConfig.HOST,
@@ -108,6 +110,8 @@ const PackageService = PackageServiceModel(sequelize);
 const ServiceLine = ServiceLineModel(sequelize);
 const BranchUnavailableDate = BranchUnavailableDateModel(sequelize);
 const ServiceParkBooking = ServiceParkBookingModel(sequelize);
+const Notification = NotificationModel(sequelize);
+const ActivityLog = ActivityLogModel(sequelize);
 
 interface DB {
     Sequelize: typeof Sequelize;
@@ -158,6 +162,8 @@ interface DB {
     ServiceLine: typeof ServiceLine;
     BranchUnavailableDate: typeof BranchUnavailableDate;
     ServiceParkBooking: typeof ServiceParkBooking;
+    Notification: typeof Notification;
+    ActivityLog: typeof ActivityLog;
 }
 
 
@@ -231,6 +237,9 @@ db.ChatSession = ChatSession;
 db.Otp = Otp;
 
 db.LeasingBank = LeasingBank;
+
+db.Notification = Notification;
+db.ActivityLog = ActivityLog;
 
 
 db.Customer.hasMany(db.Complaint, {foreignKey: "customerId", as: "complaints"});
