@@ -6,7 +6,8 @@ const { Notification } = db;
 
 export const getMyNotifications = async (req: Request, res: Response) => {
     try {
-        const userId = (req as any).user?.id;
+        // const userId = (req as any).user?.id;
+        const userId = req.params.userId;
 
         const notifications = await Notification.findAll({
             where: { user_id: userId },
@@ -26,8 +27,7 @@ export const getMyNotifications = async (req: Request, res: Response) => {
 
 export const markAsRead = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
-        const userId = (req as any).user?.id;
+        const { id, userId } = req.params;
 
         await Notification.update(
             { is_read: true },
