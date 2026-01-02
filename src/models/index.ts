@@ -582,4 +582,15 @@ db.ChatMessage.belongsTo(db.ChatSession, {
 });
 
 
+ActivityLog.belongsTo(User, {
+    foreignKey: 'user_id',
+    as: 'user'
+});
+
+User.hasMany(ActivityLog, {
+    foreignKey: 'user_id',
+    as: 'activities'
+});
+
+
 export default db;

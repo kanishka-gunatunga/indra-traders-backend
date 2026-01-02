@@ -17,6 +17,9 @@ import fastTrackRoutes from "./routes/fastTrack.routes";
 import serviceParkRoutes from "./routes/servicePark.routes";
 import unavailableRoutes from "./routes/unavailable.routes";
 import chatRoutes from "./routes/chat.routes";
+import logsRoutes from "./routes/logs.routes";
+import notificationRoutes from "./routes/notification.routes";
+import dashboardRoutes from "./routes/dashboard.routes";
 // import initSocket from "./realtime/socket";
 // import {Server} from "socket.io";
 // import path from "node:path";
@@ -103,6 +106,9 @@ app.use("/api/v1/service-park", serviceParkRoutes);
 app.use("/api/v1/unavailable", unavailableRoutes);
 app.use("/api/v1/chat", chatRoutes);
 app.use("/api/v1/leasing-banks", leasingBankRoutes);
+app.use("/api/v1/admin", logsRoutes)
+app.use("/api/v1/notification", notificationRoutes)
+app.use("/api/v1", dashboardRoutes)
 
 
 export default app;

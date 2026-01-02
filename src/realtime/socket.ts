@@ -1602,7 +1602,7 @@ const onlineAgents = new Map<number, AgentPresence>();
 const chatRoom = (chatId: string) => `chat:${chatId}`;
 const getLangRoom = (lang: string) => `agents:lang:${lang}`;
 
-export default function initSocket(io: Server) {
+export default function initChatSocket(io: Server) {
     io.on("connection", (socket: Socket) => {
         const {role, chat_id, user_id} = socket.handshake.query as any;
 
