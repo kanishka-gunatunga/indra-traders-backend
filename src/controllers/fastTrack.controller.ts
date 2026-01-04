@@ -562,6 +562,8 @@ import {Request, Response} from "express";
 import {Op} from "sequelize";
 import db from "../models";
 import http from "http-status-codes";
+import {logActivity} from "../services/logActivity";
+import {sendNotification} from "../services/notification";
 
 const {
     Customer,
@@ -736,6 +738,27 @@ export const assignBestMatchToSale = async (req: Request, res: Response) => {
 
         await dr.update({status: "ASSIGNED"});
 
+
+        const creatorId = dr.call_agent_id;
+
+        logActivity({
+            userId: creatorId,
+            module: "FAST_TRACK",
+            actionType: "ASSIGN",
+            entityId: sale.id,
+            description: `Best Match Assigned to Sales User ${salesUserId}`,
+            changes: { vehicle_id, salesUserId }
+        });
+
+        sendNotification({
+            userId: salesUserId,
+            title: "New Lead Assigned",
+            message: `Fast Track Lead ${sale.ticket_number} assigned to you.`,
+            type: "ASSIGNMENT",
+            referenceId: sale.id,
+            referenceModule: "FAST_TRACK"
+        });
+
         return res.status(http.CREATED).json(sale);
     } catch (e) {
         console.error("assignBestMatchToSale", e);
@@ -755,6 +778,15 @@ export const claimSaleLead = async (req: Request, res: Response) => {
         sale.assigned_sales_id = userId;
         sale.status = "ONGOING";
         await sale.save();
+
+        logActivity({
+            userId: userId,
+            module: "FAST_TRACK",
+            actionType: "ASSIGN",
+            entityId: sale.id,
+            description: `Agent claimed Fast Track lead (Self-Assigned)`,
+            changes: { ticket: sale.ticket_number, status: "ONGOING" }
+        });
 
         return res.status(http.OK).json(sale);
     } catch (e) {
@@ -777,8 +809,20 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
         // if (sale.status !== "ONGOING")
         //     return res.status(http.BAD_REQUEST).json({message: "Only ONGOING can be closed"});
 
+        const oldStatus = sale.status;
+
         sale.status = status;
         await sale.save();
+
+        logActivity({
+            userId: sale.assigned_sales_id || 1,
+            module: "FAST_TRACK",
+            actionType: "STATUS_CHANGE",
+            entityId: sale.id,
+            description: `Status updated from ${oldStatus} to ${status}`,
+            changes: { ticket: sale.ticket_number, status }
+        });
+
         return res.status(http.OK).json(sale);
     } catch (e) {
         console.error("updateSaleStatus", e);
@@ -795,8 +839,20 @@ export const updateSalePriority = async (req: Request, res: Response) => {
         const sale = await FastTrackSale.findByPk(saleId);
         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
 
+        const oldPriority = sale.priority;
+
         sale.priority = Number.isFinite(priority) ? priority : 0;
         await sale.save();
+
+        logActivity({
+            userId: sale.assigned_sales_id || 1,
+            module: "FAST_TRACK",
+            actionType: "UPDATE",
+            entityId: sale.id,
+            description: `Priority updated to P${priority}`,
+            changes: { ticket: sale.ticket_number, oldPriority, newPriority: priority }
+        });
+
         return res.status(http.OK).json(sale);
     } catch (e) {
         console.error("updateSalePriority", e);
@@ -1104,6 +1160,16 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
         } as any, {transaction: t});
 
         await t.commit();
+
+        logActivity({
+            userId: userId,
+            module: "FAST_TRACK",
+            actionType: "UPDATE",
+            entityId: sale.id,
+            description: `Lead escalated to Sales Level ${nextLevel}`,
+            changes: { ticket: sale.ticket_number, previousLevel: currentLevel, newLevel: nextLevel }
+        });
+
         res.status(http.OK).json({message: `Lead promoted to Sales Level ${nextLevel}`, sale});
 
     } catch (error) {
@@ -1345,6 +1411,29 @@ export const createSaleDirect = async (req: Request, res: Response) => {
         } as any, {transaction: t});
 
         await t.commit();
+
+
+        logActivity({
+            userId: sales_user_id,
+            module: "FAST_TRACK",
+            actionType: "CREATE",
+            entityId: newSale.id,
+            description: `Fast Track Sale created for ${customer_name}`,
+            changes: req.body
+        });
+
+        if (sales_user_id) {
+            sendNotification({
+                userId: sales_user_id,
+                title: "New Fast Track Lead",
+                message: `You created and self-assigned ticket ${newSale.ticket_number}`,
+                type: "ASSIGNMENT",
+                referenceId: newSale.id,
+                referenceModule: "FAST_TRACK"
+            });
+        }
+
+
         res.status(http.CREATED).json({message: "Sale created successfully", sale: newSale});
 
     } catch (error: any) {

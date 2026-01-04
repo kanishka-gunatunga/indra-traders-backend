@@ -2,6 +2,8 @@ import {Request, Response} from "express";
 import db from "../models";
 import http from "http-status-codes";
 import {Op} from "sequelize";
+import {logActivity} from "../services/logActivity";
+import {sendNotification} from "../services/notification";
 
 const {User, VehicleSale, Customer, VehicleSaleReminder, VehicleSaleFollowup, VehicleSaleHistory} = db;
 
@@ -166,6 +168,28 @@ export const createVehicleSale = async (req: Request, res: Response) => {
                 timestamp: new Date()
             } as any);
         }
+
+
+        logActivity({
+            userId: creatorId,
+            module: "VEHICLE",
+            actionType: "CREATE",
+            entityId: newSale.id,
+            description: `New Vehicle Sale lead created for ${customer_name}`,
+            changes: req.body
+        });
+
+        if (assignedId && Number(assignedId) !== Number(creatorId)) {
+            sendNotification({
+                userId: assignedId,
+                title: "New Lead Assigned",
+                message: `You have been assigned a new Vehicle Sale (Ticket: ${newSale.ticket_number})`,
+                type: "ASSIGNMENT",
+                referenceId: newSale.id,
+                referenceModule: "VEHICLE_SALE"
+            });
+        }
+
 
         res.status(http.CREATED).json({
             message: "Vehicle sale created successfully",
@@ -392,6 +416,20 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
             timestamp: new Date()
         } as any, {transaction: t});
 
+
+        logActivity({
+            userId: userId,
+            module: "VEHICLE",
+            actionType: "UPDATE",
+            entityId: sale.id,
+            description: `Lead escalated to Sales Level ${nextLevel}`,
+            changes: {
+                previousLevel: currentLevel,
+                newLevel: nextLevel,
+                ticket: sale.ticket_number
+            }
+        });
+
         await t.commit();
         res.status(http.OK).json({message: `Lead promoted to Sales Level ${nextLevel}`, sale});
 
@@ -463,9 +501,34 @@ export const assignVehicleSale = async (req: Request, res: Response) => {
         const sale = await VehicleSale.findByPk(id);
         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
 
+        const previousAssignee = sale.assigned_sales_id;
+
         sale.status = "ONGOING";
         sale.assigned_sales_id = salesUserId;
         await sale.save();
+
+
+        logActivity({
+            userId: salesUserId,
+            module: "VEHICLE",
+            actionType: "ASSIGN",
+            entityId: sale.id,
+            description: `Lead assigned to User ID ${salesUserId}`,
+            changes: {
+                previousAssignee,
+                newAssignee: salesUserId,
+                ticket: sale.ticket_number
+            }
+        });
+
+        sendNotification({
+            userId: salesUserId,
+            title: "New Lead Assigned",
+            message: `Vehicle Sale Lead (Ticket: ${sale.ticket_number}) has been assigned to you.`,
+            type: "ASSIGNMENT",
+            referenceId: sale.id,
+            referenceModule: "VEHICLE_SALE"
+        });
 
         res.status(http.OK).json({message: "Sale assigned successfully", sale});
     } catch (error) {
@@ -482,8 +545,34 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
         const sale = await VehicleSale.findByPk(id);
         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
 
+        const oldStatus = sale.status;
+
         sale.status = status;
         await sale.save();
+
+        logActivity({
+            userId: sale.assigned_sales_id || 1,
+            module: "VEHICLE",
+            actionType: "STATUS_CHANGE",
+            entityId: sale.id,
+            description: `Status updated from ${oldStatus} to ${status}`,
+            changes: {
+                oldStatus,
+                newStatus: status,
+                ticket: sale.ticket_number
+            }
+        });
+
+        if (status === "WON" && sale.call_agent_id) {
+            sendNotification({
+                userId: sale.call_agent_id,
+                title: "Lead Won!",
+                message: `Good news! Lead ${sale.ticket_number} (which you created) has been marked as WON.`,
+                type: "ALERT",
+                referenceId: sale.id,
+                referenceModule: "VEHICLE_SALE"
+            });
+        }
 
         res.status(http.OK).json({message: "Sale status updated", sale});
     } catch (error) {
@@ -497,7 +586,23 @@ export const deleteVehicleSale = async (req: Request, res: Response) => {
         const {id} = req.params;
         const sale = await VehicleSale.findByPk(id);
         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+
+        const saleDetails = {
+            ticket: sale.ticket_number,
+            customer: sale.customer_id
+        };
+
         await sale.destroy();
+
+        logActivity({
+            userId: 1,
+            module: "VEHICLE",
+            actionType: "DELETE",
+            entityId: Number(id),
+            description: `Deleted Vehicle Sale Ticket ${saleDetails.ticket}`,
+            changes: ""
+        });
+
         res.status(http.OK).json({message: "Vehicle sale deleted"});
     } catch (error) {
         console.error("Error deleting sale:", error);
@@ -645,8 +750,19 @@ export const updatePriority = async (req: Request, res: Response) => {
             return res.status(404).json({message: "Sale not found"});
         }
 
+        const oldPriority = sale.priority;
+
         sale.priority = priority;
         await sale.save();
+
+        logActivity({
+            userId: sale.assigned_sales_id || 1,
+            module: "VEHICLE",
+            actionType: "UPDATE",
+            entityId: sale.id,
+            description: `Priority changed from ${oldPriority} to ${priority}`,
+            changes: {oldPriority, newPriority: priority}
+        });
 
         return res.status(200).json({message: "Priority updated", sale});
     } catch (err) {

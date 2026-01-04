@@ -2,6 +2,8 @@ import {Request, Response} from "express";
 import db from "../models";
 import http from "http-status-codes";
 import {Op} from "sequelize";
+import {logActivity} from "../services/logActivity";
+import {sendNotification} from "../services/notification";
 
 const {SparePartSale, SparePartSaleFollowup, SparePartSaleReminder, Customer, User, SparePartSaleHistory} = db;
 
@@ -11,40 +13,6 @@ const getLevelFromRole = (role: string): number => {
     if (role === "SALES03") return 3;
     return 1;
 };
-
-
-// export const createSale = async (req: Request, res: Response) => {
-//     try {
-//         const {
-//             date,
-//             customer_id,
-//             call_agent_id,
-//             vehicle_make,
-//             vehicle_model,
-//             part_no,
-//             year_of_manufacture,
-//             additional_note,
-//         } = req.body;
-//
-//         const sale = await SparePartSale.create({
-//             ticket_number: `IMS${Date.now()}`,
-//             date,
-//             customer_id,
-//             call_agent_id,
-//             vehicle_make,
-//             vehicle_model,
-//             part_no,
-//             year_of_manufacture,
-//             additional_note,
-//         });
-//
-//         res.status(http.CREATED).json({message: "Sale created", sale});
-//     } catch (err) {
-//         console.error("createSale error:", err);
-//         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
-//     }
-// };
-
 
 export const createSale = async (req: Request, res: Response) => {
     try {
@@ -148,6 +116,29 @@ export const createSale = async (req: Request, res: Response) => {
             } as any);
         }
 
+        // const creatorId = is_self_assigned ? sales_user_id : call_agent_id;
+
+        logActivity({
+            userId: creatorId,
+            module: "SPARE_PARTS",
+            actionType: "CREATE",
+            entityId: newSale.id,
+            description: `Spare Part inquiry created for ${part_no}`,
+            changes: req.body
+        });
+
+        if (assignedId) {
+            sendNotification({
+                userId: assignedId,
+                title: "New Spare Part Inquiry",
+                message: `Ticket ${newSale.ticket_number} for part ${part_no} assigned.`,
+                type: "ASSIGNMENT",
+                referenceId: newSale.id,
+                referenceModule: "SPARE_PARTS"
+            });
+        }
+
+
         res.status(http.CREATED).json({
             message: "Lead created successfully",
             sale: newSale,
@@ -157,85 +148,6 @@ export const createSale = async (req: Request, res: Response) => {
         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
     }
 };
-
-
-// export const listSales = async (req: Request, res: Response) => {
-//     try {
-//         const {status, assigned_sales_id, call_agent_id} = req.query;
-//         const where: any = {};
-//         if (status) where.status = String(status).toUpperCase();
-//         if (assigned_sales_id) where.assigned_sales_id = Number(assigned_sales_id);
-//         if (call_agent_id) where.call_agent_id = Number(call_agent_id);
-//
-//         const sales = await SparePartSale.findAll({
-//             where,
-//             include: [
-//                 {model: Customer, as: "customer"},
-//                 {model: User, as: "callAgent", attributes: ["id", "full_name", "contact_no", "email"]},
-//                 {model: User, as: "salesUser", attributes: ["id", "full_name", "contact_no", "email"]},
-//             ],
-//             order: [["createdAt", "DESC"]],
-//         });
-//         res.status(http.OK).json(sales);
-//     } catch (err) {
-//         console.error("listSales error:", err);
-//         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
-//     }
-// };
-
-
-// export const listSales = async (req: Request, res: Response) => {
-//     try {
-//         const userId = (req as any).user?.id || req.query.userId;
-//
-//         const {status, call_agent_id} = req.query;
-//         const statusUpper = status ? String(status).toUpperCase() : undefined;
-//
-//         let whereClause: any = {};
-//
-//         if (call_agent_id) {
-//             whereClause.call_agent_id = Number(call_agent_id);
-//         }
-//
-//         if (statusUpper) {
-//             if (statusUpper === "NEW") {
-//                 whereClause.status = "NEW";
-//             } else {
-//                 if (!userId) {
-//                     return res.status(http.UNAUTHORIZED).json({message: "User ID required to view assigned leads"});
-//                 }
-//                 whereClause.status = statusUpper;
-//                 whereClause.assigned_sales_id = userId;
-//             }
-//         } else {
-//             if (userId) {
-//                 whereClause = {
-//                     ...whereClause,
-//                     [Op.or]: [
-//                         {status: "NEW"},
-//                         {assigned_sales_id: userId}
-//                     ]
-//                 };
-//             } else {
-//                 whereClause.status = "NEW";
-//             }
-//         }
-//
-//         const sales = await SparePartSale.findAll({
-//             where: whereClause,
-//             include: [
-//                 {model: Customer, as: "customer"},
-//                 {model: User, as: "callAgent", attributes: ["id", "full_name", "contact_no", "email"]},
-//                 {model: User, as: "salesUser", attributes: ["id", "full_name", "contact_no", "email"]},
-//             ],
-//             order: [["createdAt", "DESC"]],
-//         });
-//         res.status(http.OK).json(sales);
-//     } catch (err) {
-//         console.error("listSales error:", err);
-//         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
-//     }
-// };
 
 
 export const listSales = async (req: Request, res: Response) => {
@@ -301,10 +213,7 @@ export const listSales = async (req: Request, res: Response) => {
                         }
                     ];
                 }
-            }
-
-            // --- CALL AGENT / FALLBACK ---
-            else {
+            } else {
                 // Only see what they created (optional, adjust as needed)
                 // whereClause.call_agent_id = userId;
             }
@@ -314,8 +223,8 @@ export const listSales = async (req: Request, res: Response) => {
             where: whereClause,
             include: [
                 {model: Customer, as: "customer"},
-                {model: User, as: "salesUser"}, // Assigned User
-                {model: User, as: "callAgent"}, // Creator
+                {model: User, as: "salesUser"},
+                {model: User, as: "callAgent"},
             ],
             order: [["createdAt", "DESC"]],
         });
@@ -364,6 +273,21 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
         } as any, {transaction: t});
 
         await t.commit();
+
+
+        logActivity({
+            userId: userId,
+            module: "SPARE_PARTS",
+            actionType: "UPDATE",
+            entityId: sale.id,
+            description: `Lead escalated to Sales Level ${nextLevel}`,
+            changes: {
+                ticket: sale.ticket_number,
+                previousLevel: currentLevel,
+                newLevel: nextLevel
+            }
+        });
+
         res.status(http.OK).json({message: `Lead promoted to Sales Level ${nextLevel}`, sale});
 
     } catch (error) {
@@ -428,8 +352,28 @@ export const assignToSales = async (req: Request, res: Response) => {
         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
 
         sale.assigned_sales_id = salesUserId;
-        sale.status = "NEW"; // remain new until salesman clicks "assign to me"
+        sale.status = "NEW";
         await sale.save();
+
+        logActivity({
+            userId: salesUserId,
+            module: "SPARE_PARTS",
+            actionType: "ASSIGN",
+            entityId: sale.id,
+            description: `Lead assigned to User ID ${salesUserId}`,
+            changes: {ticket: sale.ticket_number, assignee: salesUserId}
+        });
+
+        sendNotification({
+            userId: salesUserId,
+            title: "New Spare Part Lead",
+            message: `You have been assigned Ticket ${sale.ticket_number} (Status: NEW).`,
+            type: "ASSIGNMENT",
+            referenceId: sale.id,
+            referenceModule: "SPARE_PARTS"
+        });
+
+
         res.status(http.OK).json({message: "Assigned", sale});
     } catch (err) {
         console.error("assignToSales error:", err);
@@ -448,6 +392,18 @@ export const assignToMe = async (req: Request, res: Response) => {
         sale.assigned_sales_id = userId;
         sale.status = "ONGOING";
         await sale.save();
+
+
+        logActivity({
+            userId: userId,
+            module: "SPARE_PARTS",
+            actionType: "ASSIGN",
+            entityId: sale.id,
+            description: `Agent claimed lead (Self-Assigned)`,
+            changes: {ticket: sale.ticket_number, status: "ONGOING"}
+        });
+
+
         res.status(http.OK).json({message: "Sale claimed", sale});
     } catch (err) {
         console.error("assignToMe error:", err);
@@ -481,6 +437,29 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
         sale.status = status;
         await sale.save();
 
+
+        const actingUser = (req as any).user?.id || sale.assigned_sales_id;
+
+        logActivity({
+            userId: actingUser,
+            module: "SPARE_PARTS",
+            actionType: "STATUS_CHANGE",
+            entityId: sale.id,
+            description: `Status changed to ${status}`,
+            changes: {status}
+        });
+
+        if (status === "WON" && sale.call_agent_id) {
+            sendNotification({
+                userId: sale.call_agent_id,
+                title: "Spare Parts Lead Won",
+                message: `Great news! Ticket ${sale.ticket_number} was marked as WON.`,
+                type: "ALERT",
+                referenceId: sale.id,
+                referenceModule: "SPARE_PARTS"
+            });
+        }
+
         return res.status(http.OK).json({
             message: `Sale status updated to ${status}`,
             sale,
@@ -490,21 +469,6 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
     }
 };
-
-
-// export const createFollowup = async (req: Request, res: Response) => {
-//     try {
-//         const {activity, activity_date, spare_part_sale_id} = req.body;
-//         const sale = await SparePartSale.findByPk(spare_part_sale_id);
-//         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
-//
-//         const f = await SparePartSaleFollowup.create({activity, activity_date, spare_part_sale_id});
-//         res.status(http.CREATED).json({message: "Followup created", followup: f});
-//     } catch (err) {
-//         console.error("createFollowup error:", err);
-//         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
-//     }
-// };
 
 
 export const createFollowup = async (req: Request, res: Response) => {
@@ -529,20 +493,6 @@ export const createFollowup = async (req: Request, res: Response) => {
     }
 };
 
-
-// export const createReminder = async (req: Request, res: Response) => {
-//     try {
-//         const {task_title, task_date, note, spare_part_sale_id} = req.body;
-//         const sale = await SparePartSale.findByPk(spare_part_sale_id);
-//         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
-//
-//         const reminder = await SparePartSaleReminder.create({task_title, task_date, note, spare_part_sale_id});
-//         res.status(http.CREATED).json({message: "Reminder created", reminder: reminder});
-//     } catch (err) {
-//         console.error("createReminder error:", err);
-//         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
-//     }
-// };
 
 export const createReminder = async (req: Request, res: Response) => {
     try {
@@ -674,8 +624,19 @@ export const updatePriority = async (req: Request, res: Response) => {
             return res.status(404).json({message: "Sale not found"});
         }
 
+        const oldPriority = sale.priority;
+
         sale.priority = priority;
         await sale.save();
+
+        logActivity({
+            userId: sale.assigned_sales_id || 1,
+            module: "SPARE_PARTS",
+            actionType: "UPDATE",
+            entityId: sale.id,
+            description: `Priority updated to P${priority}`,
+            changes: {oldPriority, newPriority: priority, ticket: sale.ticket_number}
+        });
 
         return res.status(200).json({message: "Priority updated", sale});
     } catch (err) {

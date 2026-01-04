@@ -3,6 +3,8 @@ import db from "../models";
 import http from "http-status-codes";
 import {Op} from "sequelize";
 import dayjs from "dayjs";
+import {logActivity} from "../services/logActivity";
+import {sendNotification} from "../services/notification";
 
 
 const {
@@ -64,6 +66,19 @@ export const handleCustomerAndVehicle = async (data: any) => {
 export const handleServiceIntake = async (req: Request, res: Response) => {
     try {
         const result = await handleCustomerAndVehicle(req.body);
+
+        const userId = req.body.userId || (req as any).user?.id;
+        if (userId) {
+            logActivity({
+                userId,
+                module: "SERVICE_PARK",
+                actionType: "UPDATE",
+                entityId: result.vehicle.id,
+                description: `Vehicle Intake: ${result.vehicle.vehicle_no} for ${result.customer.customer_name}`,
+                changes: req.body
+            });
+        }
+
         return res.status(200).json({
             message: "Customer and vehicle history processed successfully",
             ...result,
@@ -251,6 +266,30 @@ export const createAssignToSale = async (req: Request, res: Response) => {
         // });
 
         await t.commit();
+
+        const actingUserId = is_self_assigned ? sales_user_id : call_agent_id;
+
+        logActivity({
+            userId: actingUserId,
+            module: "SERVICE_PARK",
+            actionType: "CREATE",
+            entityId: newSale.id,
+            description: `Service Park Job created for ${customer_name} (${vehicle_make} ${vehicle_model})`,
+            changes: req.body
+        });
+
+        if (assignedId) {
+            sendNotification({
+                userId: assignedId,
+                title: "New Service Job",
+                message: `Service Park Ticket ${newSale.ticket_number} is active.`,
+                type: "ASSIGNMENT",
+                referenceId: newSale.id,
+                referenceModule: "SERVICE_PARK"
+            });
+        }
+
+
         res.status(201).json({message: "Sale assigned", sale: newSale});
     } catch (error) {
         console.error(error);
@@ -270,6 +309,19 @@ export const assignToSalesAgent = async (req: Request, res: Response) => {
         sale.sales_user_id = userId;
         sale.status = "ONGOING";
         await sale.save();
+
+        // const adminId = (req as any).user?.id || 1;
+
+        logActivity({
+            userId: userId,
+            module: "SERVICE_PARK",
+            actionType: "ASSIGN",
+            entityId: sale.id,
+            description: `Service Sale reassigned to User ID ${userId}`,
+            changes: { new_sales_user_id: userId }
+        });
+
+
 
         res.json({message: "Sale assigned to agent", sale});
     } catch (err) {
@@ -563,6 +615,18 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
         } as any, {transaction: t});
 
         await t.commit();
+
+
+        logActivity({
+            userId,
+            module: "SERVICE_PARK",
+            actionType: "UPDATE",
+            entityId: sale.id,
+            description: `Job escalated to Level ${nextLevel}`,
+            changes: { ticket: sale.ticket_number, previousLevel: currentLevel }
+        });
+
+
         res.status(http.OK).json({message: `Lead promoted to Sales Level ${nextLevel}`, sale});
 
     } catch (error) {
@@ -603,14 +667,20 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
             return res.status(http.NOT_FOUND).json({message: "Sale not found"});
         }
 
-        // if (sale.status !== "ONGOING") {
-        //     return res.status(http.BAD_REQUEST).json({
-        //         message: `Cannot update status. Current status is '${sale.status}'. Only 'ONGOING' sales can be marked as 'WON' or 'LOST'.`,
-        //     });
-        // }
+        const oldStatus = sale.status;
 
         sale.status = status;
         await sale.save();
+
+
+        logActivity({
+            userId: sale.sales_user_id || 1,
+            module: "SERVICE_PARK",
+            actionType: "STATUS_CHANGE",
+            entityId: sale.id,
+            description: `Status updated from ${oldStatus} to ${status}`,
+            changes: { ticket: sale.ticket_number, status }
+        });
 
         return res.status(http.OK).json({
             message: `Sale status updated to ${status}`,
@@ -621,21 +691,6 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
     }
 };
-
-
-// export const createFollowup = async (req: Request, res: Response) => {
-//     try {
-//         const {activity, activity_date, service_park_sale_id} = req.body;
-//         const sale = await ServiceParkSale.findByPk(service_park_sale_id);
-//         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
-//
-//         const f = await ServiceParkSaleFollowUp.create({activity, activity_date, service_park_sale_id});
-//         res.status(http.CREATED).json({message: "Followup created", followup: f});
-//     } catch (err) {
-//         console.error("createFollowup error:", err);
-//         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
-//     }
-// };
 
 
 export const createFollowup = async (req: Request, res: Response) => {
@@ -659,22 +714,6 @@ export const createFollowup = async (req: Request, res: Response) => {
         res.status(500).json({message: "Server error"});
     }
 };
-
-
-// export const createReminder = async (req: Request, res: Response) => {
-//     try {
-//         const {task_title, task_date, note, service_park_sale_id} = req.body;
-//         const sale = await ServiceParkSale.findByPk(service_park_sale_id);
-//         if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
-//
-//         const reminder = await ServiceParkSaleReminder.create({task_title, task_date, note, service_park_sale_id});
-//         res.status(http.CREATED).json({message: "Reminder created", reminder: reminder});
-//     } catch (err) {
-//         console.error("createReminder error:", err);
-//         res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
-//     }
-// };
-
 
 export const createReminder = async (req: Request, res: Response) => {
     try {
@@ -774,6 +813,15 @@ export const updatePriority = async (req: Request, res: Response) => {
 
         sale.priority = priority;
         await sale.save();
+
+        logActivity({
+            userId: sale.sales_user_id || 1,
+            module: "SERVICE_PARK",
+            actionType: "UPDATE",
+            entityId: sale.id,
+            description: `Priority updated to P${priority}`,
+            changes: { ticket: sale.ticket_number, priority }
+        });
 
         return res.status(200).json({message: "Priority updated", sale});
     } catch (err) {
@@ -1441,6 +1489,16 @@ export const createBooking = async (req: Request, res: Response) => {
         await ServiceParkBooking.bulkCreate(bookingRecords, {transaction: t});
 
         await t.commit();
+
+        logActivity({
+            userId: customer_id,
+            module: "SERVICE_PARK",
+            actionType: "CREATE",
+            entityId: 0,
+            description: `New Booking created for ${booking_date} (${slots.length} slots)`,
+            changes: { branch_id, date: booking_date, slots }
+        });
+
         return res.status(http.CREATED).json({message: "Booking confirmed"});
 
     } catch (error: any) {
