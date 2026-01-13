@@ -86,6 +86,15 @@ export const createVehicleSale = async (req: Request, res: Response) => {
             down_payment,
             price_from,
             price_to,
+
+            enable_leasing,
+            leasing_vehicle_price,
+            leasing_bank,
+            leasing_time_period,
+            leasing_promo_code,
+            leasing_interest_rate,
+            leasing_monthly_installment,
+            leasing_total_amount,
         } = req.body;
 
         const creatorId = is_self_assigned ? sales_user_id : call_agent_id;
@@ -132,6 +141,29 @@ export const createVehicleSale = async (req: Request, res: Response) => {
         const safePriceFrom = price_from ? Number(price_from) : 0;
         const safePriceTo = price_to ? Number(price_to) : 0;
 
+        const isLeasing = enable_leasing === true || enable_leasing === "true";
+
+        const leasingData = isLeasing ? {
+            enable_leasing: true,
+            leasing_vehicle_price: leasing_vehicle_price ? Number(leasing_vehicle_price) : null,
+            leasing_bank: leasing_bank || null,
+            leasing_time_period: leasing_time_period ? Number(leasing_time_period) : null,
+            leasing_promo_code: leasing_promo_code || null,
+            leasing_interest_rate: leasing_interest_rate ? Number(leasing_interest_rate) : null,
+            leasing_monthly_installment: leasing_monthly_installment ? Number(leasing_monthly_installment) : null,
+            leasing_total_amount: leasing_total_amount ? Number(leasing_total_amount) : null,
+        } : {
+            enable_leasing: false,
+            leasing_vehicle_price: null,
+            leasing_bank: null,
+            leasing_time_period: null,
+            leasing_promo_code: null,
+            leasing_interest_rate: null,
+            leasing_monthly_installment: null,
+            leasing_total_amount: null,
+        };
+
+
         const finalNote = additional_note || (remark ? `Remark: ${remark} | Source: ${lead_source} | Type: ${vehicle_type}` : null);
 
         const newSale = await VehicleSale.create({
@@ -154,7 +186,9 @@ export const createVehicleSale = async (req: Request, res: Response) => {
             price_from: safePriceFrom,
             price_to: safePriceTo,
             additional_note: finalNote,
-            priority: priority || 0
+            priority: priority || 0,
+
+            ...leasingData
         });
 
         if (assignedId) {

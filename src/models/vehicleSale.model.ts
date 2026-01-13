@@ -25,11 +25,22 @@ export interface VehicleSaleAttributes {
     price_to: number;
     priority: number;
     additional_note?: string | null;
+
+    enable_leasing: boolean;
+    leasing_vehicle_price?: number | null;
+    leasing_bank?: string | null;
+    leasing_time_period?: number | null;
+    leasing_promo_code?: string | null;
+    leasing_interest_rate?: number | null;
+    leasing_monthly_installment?: number | null;
+    leasing_total_amount?: number | null;
 }
 
 export type VehicleSaleCreationAttributes = Optional<
     VehicleSaleAttributes,
-    "id" | "status" | "assigned_sales_id" | "additional_note" | "priority" | "current_level"
+    "id" | "status" | "assigned_sales_id" | "additional_note" | "priority" | "current_level" |
+    "enable_leasing" | "leasing_vehicle_price" | "leasing_bank" | "leasing_time_period" |
+    "leasing_promo_code" | "leasing_interest_rate" | "leasing_monthly_installment" | "leasing_total_amount"
 >;
 
 class VehicleSale
@@ -54,6 +65,15 @@ class VehicleSale
     public price_to!: number;
     public additional_note!: string | null;
     public priority!: number;
+
+    public enable_leasing!: boolean;
+    public leasing_vehicle_price!: number | null;
+    public leasing_bank!: string | null;
+    public leasing_time_period!: number | null;
+    public leasing_promo_code!: string | null;
+    public leasing_interest_rate!: number | null;
+    public leasing_monthly_installment!: number | null;
+    public leasing_total_amount!: number | null;
 }
 
 export default (sequelize: Sequelize) => {
@@ -140,12 +160,41 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.INTEGER,
                 allowNull: true,
                 defaultValue: 0
+            },
+
+            enable_leasing: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
+            leasing_vehicle_price: {
+                type: DataTypes.FLOAT,
+                allowNull: true,
+            },
+            leasing_bank: {
+                type: DataTypes.STRING(100),
+                allowNull: true,
+            },
+            leasing_time_period: {
+                type: DataTypes.INTEGER,
+                allowNull: true,
+            },
+            leasing_promo_code: {
+                type: DataTypes.STRING(50),
+                allowNull: true,
+            },
+            leasing_interest_rate: {
+                type: DataTypes.FLOAT,
+                allowNull: true,
+            },
+            leasing_monthly_installment: {
+                type: DataTypes.FLOAT,
+                allowNull: true,
+            },
+            leasing_total_amount: {
+                type: DataTypes.FLOAT,
+                allowNull: true,
             }
-            // sales_level: {
-            //     type: DataTypes.INTEGER,
-            //     allowNull: false,
-            //     defaultValue: 1,
-            // }
         },
         {
             sequelize,
