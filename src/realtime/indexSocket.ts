@@ -3,6 +3,6 @@ import initChatSocket from "./socket";
 import initNotificationSocket from "./notificationSocket";
 
 export default function initSocket(io: Server) {
-    initChatSocket(io);
+    // initChatSocket(io);
     // initNotificationSocket(io);
 }
