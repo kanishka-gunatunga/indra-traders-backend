@@ -4,5 +4,5 @@ import initNotificationSocket from "./notificationSocket";
 
 export default function initSocket(io: Server) {
     initChatSocket(io);
-    initNotificationSocket(io);
+    // initNotificationSocket(io);
 }
