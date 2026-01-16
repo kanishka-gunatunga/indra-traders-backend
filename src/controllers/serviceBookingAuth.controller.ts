@@ -88,3 +88,25 @@ export const serviceBookingLogin = async (req: Request, res: Response) => {
     }
 
 };
+
+export const getServiceBookingBranches = async (req: Request, res: Response) => {
+    try {
+
+        const branches = await Branch.findAll({
+            where: {
+                is_active: true
+            },
+            attributes: ["id", "name"],
+            order: [["name", "ASC"]]
+        });
+
+        res.status(http.OK).json(branches);
+        
+    } catch (error: any) {
+        console.error("Fetch Branches Error: ", error);
+
+        res.status(http.INTERNAL_SERVER_ERROR).json({
+            message: "Internal server error", error: error.message
+        });
+    }
+}
