@@ -49,6 +49,7 @@ import BranchUnavailableDateModel from "./branchUnavailableDate.model";
 import ServiceParkBookingModel from "./serviceParkBooking.model";
 import NotificationModel from "./notification.model";
 import ActivityLogModel from "./activityLog.model";
+import ServiceBookingAuthModel from "./serviceBookingAuth.model";
 
 const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
     host: dbConfig.HOST,
@@ -112,6 +113,7 @@ const BranchUnavailableDate = BranchUnavailableDateModel(sequelize);
 const ServiceParkBooking = ServiceParkBookingModel(sequelize);
 const Notification = NotificationModel(sequelize);
 const ActivityLog = ActivityLogModel(sequelize);
+const ServiceBookingAuth = ServiceBookingAuthModel(sequelize);
 
 interface DB {
     Sequelize: typeof Sequelize;
@@ -164,6 +166,7 @@ interface DB {
     ServiceParkBooking: typeof ServiceParkBooking;
     Notification: typeof Notification;
     ActivityLog: typeof ActivityLog;
+    ServiceBookingAuth: typeof ServiceBookingAuth;
 }
 
 
@@ -213,6 +216,8 @@ db.ServiceParkSaleFollowUp = ServiceParkSaleFollowUp;
 db.ServiceParkSaleReminder = ServiceParkSaleReminder;
 db.ServiceParkSaleHistory = ServiceParkSaleHistory;
 
+// service booking auth
+db.ServiceBookingAuth = ServiceBookingAuth;
 
 db.Service = Service;
 db.ServiceLine = ServiceLine;
@@ -463,6 +468,9 @@ db.ServiceParkSaleReminder.belongsTo(db.User, {
     foreignKey: "created_by",
     as: "creator"
 });
+
+// ServiceBookingAuth
+db.ServiceBookingAuth.belongsTo(db.Branch, {foreignKey: "branch_id", as: "branch"});
 
 
 // db.Branch.belongsToMany(db.Service, {through: db.BranchService, foreignKey: 'branch_id', as: 'services'});

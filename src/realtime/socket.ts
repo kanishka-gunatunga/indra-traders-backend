@@ -1070,7 +1070,7 @@
 import {Server, Socket} from "socket.io";
 import db from "../models";
 import {Pinecone} from "@pinecone-database/pinecone";
-import {FeatureExtractionPipeline, pipeline} from "@xenova/transformers";
+// import {FeatureExtractionPipeline, pipeline} from "@xenova/transformers";
 import {QueryTypes, Op} from "sequelize";
 import {TranslateService} from "../services/translate";
 
@@ -1114,7 +1114,8 @@ const llm = new ChatOpenAI({
     temperature: 0,
 });
 
-let embedder: FeatureExtractionPipeline | null = null;
+// let embedder: FeatureExtractionPipeline | null = null;
+let embedder: any | null = null;
 let dbSchemaCache: string | null = null;
 
 const BOT_USER_ID = 1;
@@ -1122,6 +1123,8 @@ const BOT_USER_ID = 1;
 async function getEmbedder() {
     if (!embedder) {
         console.log("⚡ Loading Embedding Model (all-MiniLM-L6-v2)...");
+        //line added to resolve crashin on windows
+        const { pipeline } = await (eval('import("@xenova/transformers")') as Promise<typeof import("@xenova/transformers")>);
         embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
     }
     return embedder;
