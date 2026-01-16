@@ -318,9 +318,8 @@ export const assignToSalesAgent = async (req: Request, res: Response) => {
             actionType: "ASSIGN",
             entityId: sale.id,
             description: `Service Sale reassigned to User ID ${userId}`,
-            changes: { new_sales_user_id: userId }
+            changes: {new_sales_user_id: userId}
         });
-
 
 
         res.json({message: "Sale assigned to agent", sale});
@@ -623,7 +622,7 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
             actionType: "UPDATE",
             entityId: sale.id,
             description: `Job escalated to Level ${nextLevel}`,
-            changes: { ticket: sale.ticket_number, previousLevel: currentLevel }
+            changes: {ticket: sale.ticket_number, previousLevel: currentLevel}
         });
 
 
@@ -679,7 +678,7 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
             actionType: "STATUS_CHANGE",
             entityId: sale.id,
             description: `Status updated from ${oldStatus} to ${status}`,
-            changes: { ticket: sale.ticket_number, status }
+            changes: {ticket: sale.ticket_number, status}
         });
 
         return res.status(http.OK).json({
@@ -820,7 +819,7 @@ export const updatePriority = async (req: Request, res: Response) => {
             actionType: "UPDATE",
             entityId: sale.id,
             description: `Priority updated to P${priority}`,
-            changes: { ticket: sale.ticket_number, priority }
+            changes: {ticket: sale.ticket_number, priority}
         });
 
         return res.status(200).json({message: "Priority updated", sale});
@@ -1452,11 +1451,58 @@ export const getDailySlots = async (req: Request, res: Response) => {
 export const createBooking = async (req: Request, res: Response) => {
     const t = await db.sequelize.transaction();
     try {
-        const {branch_id, service_line_id, booking_date, slots, customer_id, vehicle_no} = req.body;
+        const {
+            branch_id, service_line_id, booking_date, slots, customer_id, vehicle_no, owner_name,
+            contact_no,
+            email,
+            address
+        } = req.body;
 
 
         const branchIdNum = Number(branch_id);
         const lineIdNum = Number(service_line_id);
+
+        let finalCustomerId = customer_id;
+
+        if (!finalCustomerId && contact_no) {
+            let customer = await Customer.findOne({
+                where: {phone_number: contact_no},
+                transaction: t
+            });
+
+            if (!customer) {
+                console.log("Customer not found, creating new...");
+                customer = await Customer.create({
+                    id: `CUS${Date.now()}`,
+                    customer_name: owner_name,
+                    phone_number: contact_no,
+                    email: email || null,
+                    // address: address || null,
+                    city: address,
+                    lead_source: "Service Park Booking"
+                }, {transaction: t});
+
+
+                // if (vehicle_no) {
+                //     await ServiceParkVehicleHistory.create({
+                //         vehicle_no: vehicle_no,
+                //         customer_id: customer.id,
+                //         owner_name: owner_name,
+                //         contact_no: contact_no,
+                //         odometer: 0,
+                //         created_by: 1, // System or User ID
+                //     }, { transaction: t });
+                // }
+            }
+
+            finalCustomerId = customer.id;
+        }
+
+        if (!finalCustomerId) {
+            await t.rollback();
+            return res.status(400).json({message: "Customer details (ID or Phone/Name) are required."});
+        }
+
 
         const times = slots.map((s: any) => s.start);
         const existing = await ServiceParkBooking.findAll({
@@ -1482,9 +1528,11 @@ export const createBooking = async (req: Request, res: Response) => {
             start_time: slot.start,
             end_time: slot.end,
             status: "BOOKED",
-            customer_id,
-            // vehicle_no
+            customer_id: finalCustomerId,
+            vehicle_no: vehicle_no
         }));
+
+        console.log("Final Customer Id used for booking:", finalCustomerId);
 
         await ServiceParkBooking.bulkCreate(bookingRecords, {transaction: t});
 
@@ -1496,7 +1544,7 @@ export const createBooking = async (req: Request, res: Response) => {
             actionType: "CREATE",
             entityId: 0,
             description: `New Booking created for ${booking_date} (${slots.length} slots)`,
-            changes: { branch_id, date: booking_date, slots }
+            changes: {branch_id, date: booking_date, slots}
         });
 
         return res.status(http.CREATED).json({message: "Booking confirmed"});
