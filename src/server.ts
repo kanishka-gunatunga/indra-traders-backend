@@ -17,7 +17,8 @@ export const io = new Server(httpServer, {
 //Initialize socket handlers
 initSocket(io);
 
-db.sequelize.sync({alter: true, force: false}).then(() => {
+// db.sequelize.sync({alter: true, force: false}).then(() => {
+db.sequelize.sync({alter: false, force: false}).then(() => {
     console.log("Database synced successfully!!");
     // app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
     httpServer.listen(PORT, () => {

@@ -4,7 +4,7 @@ dotenv.config();
 const dbConfig = {
     DB: process.env.DATABASE || "edwin",
     USER: process.env.DB_USERNAME || "root",
-    PASSWORD: process.env.DB_PASSWORD || "Kaveesha@123",
+    PASSWORD: process.env.DB_PASSWORD || "Dinanjana3362",
     HOST: process.env.HOST || "localhost",
     dialect: "mysql",
     pool: {
