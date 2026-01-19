@@ -1,8 +1,5 @@
 import { Router } from "express";
-import {
-  serviceBookingLogin,
-  getServiceBookingBranches,
-} from "../controllers/serviceBookingAuth.controller";
+import { serviceBookingLogin, getServiceBookingBranches } from "../controllers/serviceBookingAuth.controller";
 import { getScheduledServices } from "../controllers/serviceBooking.controller";
 
 const router = Router();
