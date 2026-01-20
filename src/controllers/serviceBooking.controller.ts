@@ -83,16 +83,16 @@ export const getScheduledServices = async (req: Request, res: Response) => {
       order: [["start_time", "ASC"]], // Order by time, earliest first
     });
 
-    // Transform data to match API specification
+    
     const response = bookings.map((booking) => {
-      // Access included models - Sequelize uses model name when no alias is defined
+      
       const serviceLine = (booking as any).ServiceLine;
       const customer = (booking as any).Customer;
       const vehicle = (booking as any).vehicle;
 
       return {
         time: formatTimeTo12Hour(booking.start_time),
-        cab: `CAB - ${booking.vehicle_no || "N/A"}`,
+        cab: booking.vehicle_no || "N/A",
         customer: customer?.customer_name || "N/A",
         service: serviceLine?.name || "N/A", // Using ServiceLine name as service name
         bay: serviceLine?.name || "N/A", // Using ServiceLine name as bay
