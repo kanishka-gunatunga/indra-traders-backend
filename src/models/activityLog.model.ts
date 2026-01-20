@@ -57,7 +57,7 @@ interface ActivityLogAttributes {
     user_id: number;
     user_role: string;
     department: string;
-    module: "VEHICLE" | "SPARE_PARTS" | "FAST_TRACK" | "SERVICE_PARK" | "USER_MGMT";
+    module: "VEHICLE" | "SPARE_PARTS" | "FAST_TRACK" | "SERVICE_PARK" | "USER_MGMT" | "BYD_SALES";
     action_type: "CREATE" | "UPDATE" | "DELETE" | "ASSIGN" | "STATUS_CHANGE";
     entity_id: number;
     description: string;
@@ -65,14 +65,14 @@ interface ActivityLogAttributes {
     created_at?: Date;
 }
 
-interface ActivityLogCreationAttributes extends Optional<ActivityLogAttributes, "id" | "created_at"> {}
+interface ActivityLogCreationAttributes extends Optional<ActivityLogAttributes, "id" | "created_at"> { }
 
 class ActivityLog extends Model<ActivityLogAttributes, ActivityLogCreationAttributes> implements ActivityLogAttributes {
     public id!: number;
     public user_id!: number;
     public user_role!: string;
     public department!: string;
-    public module!: "VEHICLE" | "SPARE_PARTS" | "FAST_TRACK" | "SERVICE_PARK" | "USER_MGMT";
+    public module!: "VEHICLE" | "SPARE_PARTS" | "FAST_TRACK" | "SERVICE_PARK" | "USER_MGMT" | "BYD_SALES";
     public action_type!: "CREATE" | "UPDATE" | "DELETE" | "ASSIGN" | "STATUS_CHANGE";
     public entity_id!: number;
     public description!: string;

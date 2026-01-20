@@ -1,5 +1,5 @@
 import "mysql2";
-import {Sequelize} from "sequelize";
+import { Sequelize } from "sequelize";
 import dbConfig from "../config/db.config";
 import CustomerModel from "./customer.model";
 import ComplaintModel from "./complaint.model";
@@ -50,6 +50,10 @@ import ServiceParkBookingModel from "./serviceParkBooking.model";
 import NotificationModel from "./notification.model";
 import ActivityLogModel from "./activityLog.model";
 import ServiceBookingAuthModel from "./serviceBookingAuth.model";
+import BydSaleModel from "./bydSale.model";
+import BydSaleFollowupModel from "./bydSaleFollowup.model";
+import BydSaleReminderModel from "./bydSaleReminder.model";
+import BydSaleHistoryModel from "./bydSaleHistory.model";
 
 const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
     host: dbConfig.HOST,
@@ -71,8 +75,13 @@ const ComplaintReminder = ComplaintReminderModel(sequelize);
 const ComplaintFollowUp = ComplaintFollowUpModel(sequelize);
 const Event = EventModel(sequelize);
 const VehicleSale = VehicleSaleModel(sequelize);
+const BydSale = BydSaleModel(sequelize);
+const BydSaleFollowup = BydSaleFollowupModel(sequelize);
+const BydSaleReminder = BydSaleReminderModel(sequelize);
+const BydSaleHistory = BydSaleHistoryModel(sequelize);
 const User = UserModel(sequelize);
 const VehicleSaleFollowup = VehicleSaleFollowupModel(sequelize);
+
 const VehicleSaleReminder = VehicleSaleReminderModel(sequelize);
 const SparePart = SparePartModel(sequelize);
 const SparePartStock = SparePartStockModel(sequelize);
@@ -167,6 +176,10 @@ interface DB {
     Notification: typeof Notification;
     ActivityLog: typeof ActivityLog;
     ServiceBookingAuth: typeof ServiceBookingAuth;
+    BydSale: typeof BydSale;
+    BydSaleFollowup: typeof BydSaleFollowup;
+    BydSaleReminder: typeof BydSaleReminder;
+    BydSaleHistory: typeof BydSaleHistory;
 }
 
 
@@ -181,6 +194,10 @@ db.ComplaintFollowUp = ComplaintFollowUp;
 db.ComplaintReminder = ComplaintReminder;
 db.Event = Event;
 db.VehicleSale = VehicleSale;
+db.BydSale = BydSale;
+db.BydSaleFollowup = BydSaleFollowup;
+db.BydSaleReminder = BydSaleReminder;
+db.BydSaleHistory = BydSaleHistory;
 db.User = User;
 
 // vehicle sale
@@ -247,17 +264,17 @@ db.Notification = Notification;
 db.ActivityLog = ActivityLog;
 
 
-db.Customer.hasMany(db.Complaint, {foreignKey: "customerId", as: "complaints"});
-db.Complaint.belongsTo(db.Customer, {foreignKey: "customerId", as: "customer"});
+db.Customer.hasMany(db.Complaint, { foreignKey: "customerId", as: "complaints" });
+db.Complaint.belongsTo(db.Customer, { foreignKey: "customerId", as: "customer" });
 
-db.Complaint.hasMany(db.ComplaintFollowUp, {foreignKey: "complaintId", as: "followups"});
-db.ComplaintFollowUp.belongsTo(db.Complaint, {foreignKey: "complaintId", as: "complaint"});
+db.Complaint.hasMany(db.ComplaintFollowUp, { foreignKey: "complaintId", as: "followups" });
+db.ComplaintFollowUp.belongsTo(db.Complaint, { foreignKey: "complaintId", as: "complaint" });
 
-db.Complaint.hasMany(db.ComplaintReminder, {foreignKey: "complaintId", as: "reminders"});
-db.ComplaintReminder.belongsTo(db.Complaint, {foreignKey: "complaintId", as: "complaint"});
+db.Complaint.hasMany(db.ComplaintReminder, { foreignKey: "complaintId", as: "reminders" });
+db.ComplaintReminder.belongsTo(db.Complaint, { foreignKey: "complaintId", as: "complaint" });
 
-db.Customer.hasMany(db.Event, {foreignKey: "customerId", as: "events"});
-db.Event.belongsTo(db.Customer, {foreignKey: "customerId", as: "customer"});
+db.Customer.hasMany(db.Event, { foreignKey: "customerId", as: "events" });
+db.Event.belongsTo(db.Customer, { foreignKey: "customerId", as: "customer" });
 
 db.ComplaintFollowUp.belongsTo(db.User, {
     foreignKey: "created_by",
@@ -272,15 +289,15 @@ db.ComplaintReminder.belongsTo(db.User, {
 
 // vehicle sale
 
-db.VehicleSale.belongsTo(db.Customer, {foreignKey: "customer_id", as: "customer"});
-db.VehicleSale.belongsTo(db.User, {foreignKey: "call_agent_id", as: "callAgent"});
-db.VehicleSale.belongsTo(db.User, {foreignKey: "assigned_sales_id", as: "salesUser"});
+db.VehicleSale.belongsTo(db.Customer, { foreignKey: "customer_id", as: "customer" });
+db.VehicleSale.belongsTo(db.User, { foreignKey: "call_agent_id", as: "callAgent" });
+db.VehicleSale.belongsTo(db.User, { foreignKey: "assigned_sales_id", as: "salesUser" });
 
-db.VehicleSale.hasMany(db.VehicleSaleFollowup, {foreignKey: "vehicleSaleId", as: "followups"});
-db.VehicleSaleFollowup.belongsTo(db.VehicleSale, {foreignKey: "vehicleSaleId", as: "vehicleSale"});
+db.VehicleSale.hasMany(db.VehicleSaleFollowup, { foreignKey: "vehicleSaleId", as: "followups" });
+db.VehicleSaleFollowup.belongsTo(db.VehicleSale, { foreignKey: "vehicleSaleId", as: "vehicleSale" });
 
-db.VehicleSale.hasMany(db.VehicleSaleReminder, {foreignKey: "vehicleSaleId", as: "reminders"});
-db.VehicleSaleReminder.belongsTo(db.VehicleSale, {foreignKey: "vehicleSaleId", as: "vehicleSale"});
+db.VehicleSale.hasMany(db.VehicleSaleReminder, { foreignKey: "vehicleSaleId", as: "reminders" });
+db.VehicleSaleReminder.belongsTo(db.VehicleSale, { foreignKey: "vehicleSaleId", as: "vehicleSale" });
 
 db.VehicleSale.hasMany(db.VehicleSaleHistory, {
     foreignKey: "vehicle_sale_id",
@@ -311,23 +328,23 @@ db.VehicleSaleReminder.belongsTo(db.User, {
 
 // spare parts
 
-db.SparePart.hasMany(db.SparePartStock, {foreignKey: "spare_part_id", as: "stocks"});
-db.SparePartStock.belongsTo(db.SparePart, {foreignKey: "spare_part_id", as: "sparePart"});
+db.SparePart.hasMany(db.SparePartStock, { foreignKey: "spare_part_id", as: "stocks" });
+db.SparePartStock.belongsTo(db.SparePart, { foreignKey: "spare_part_id", as: "sparePart" });
 
-db.SparePart.hasMany(db.SpareInvoiceItem, {foreignKey: "spare_part_id", as: "invoiceItems"});
+db.SparePart.hasMany(db.SpareInvoiceItem, { foreignKey: "spare_part_id", as: "invoiceItems" });
 
-db.SparePartSale.belongsTo(db.Customer, {foreignKey: "customer_id", as: "customer"});
-db.SparePartSale.belongsTo(db.User, {foreignKey: "call_agent_id", as: "callAgent"});
-db.SparePartSale.belongsTo(db.User, {foreignKey: "assigned_sales_id", as: "salesUser"});
+db.SparePartSale.belongsTo(db.Customer, { foreignKey: "customer_id", as: "customer" });
+db.SparePartSale.belongsTo(db.User, { foreignKey: "call_agent_id", as: "callAgent" });
+db.SparePartSale.belongsTo(db.User, { foreignKey: "assigned_sales_id", as: "salesUser" });
 
-db.SparePartSale.hasMany(db.SparePartSaleFollowup, {foreignKey: "spare_part_sale_id", as: "followups"});
-db.SparePartSaleFollowup.belongsTo(db.SparePartSale, {foreignKey: "spare_part_sale_id", as: "sale"});
+db.SparePartSale.hasMany(db.SparePartSaleFollowup, { foreignKey: "spare_part_sale_id", as: "followups" });
+db.SparePartSaleFollowup.belongsTo(db.SparePartSale, { foreignKey: "spare_part_sale_id", as: "sale" });
 
-db.SparePartSale.hasMany(db.SparePartSaleReminder, {foreignKey: "spare_part_sale_id", as: "reminders"});
-db.SparePartSaleReminder.belongsTo(db.SparePartSale, {foreignKey: "spare_part_sale_id", as: "sale"});
+db.SparePartSale.hasMany(db.SparePartSaleReminder, { foreignKey: "spare_part_sale_id", as: "reminders" });
+db.SparePartSaleReminder.belongsTo(db.SparePartSale, { foreignKey: "spare_part_sale_id", as: "sale" });
 
-db.SpareInvoice.hasMany(db.SpareInvoiceItem, {foreignKey: "invoice_id", as: "items"});
-db.SpareInvoiceItem.belongsTo(db.SpareInvoice, {foreignKey: "invoice_id", as: "invoice"});
+db.SpareInvoice.hasMany(db.SpareInvoiceItem, { foreignKey: "invoice_id", as: "items" });
+db.SpareInvoiceItem.belongsTo(db.SpareInvoice, { foreignKey: "invoice_id", as: "invoice" });
 
 db.SparePartSale.hasMany(db.SparePartSaleHistory, {
     foreignKey: "spare_part_sale_id",
@@ -356,41 +373,41 @@ db.SparePartSaleReminder.belongsTo(db.User, {
 });
 
 
-db.Customer.hasMany(db.FastTrackRequest, {foreignKey: "customer_id"});
-db.FastTrackRequest.belongsTo(db.Customer, {foreignKey: "customer_id", as: "customer"});
+db.Customer.hasMany(db.FastTrackRequest, { foreignKey: "customer_id" });
+db.FastTrackRequest.belongsTo(db.Customer, { foreignKey: "customer_id", as: "customer" });
 
-db.User.hasMany(db.FastTrackRequest, {foreignKey: "call_agent_id"});
-db.FastTrackRequest.belongsTo(db.User, {foreignKey: "call_agent_id", as: "callAgent"});
+db.User.hasMany(db.FastTrackRequest, { foreignKey: "call_agent_id" });
+db.FastTrackRequest.belongsTo(db.User, { foreignKey: "call_agent_id", as: "callAgent" });
 
-db.FastTrackRequest.hasMany(db.FastTrackBestMatch, {foreignKey: "direct_request_id", as: "bestMatches"});
-db.FastTrackBestMatch.belongsTo(db.FastTrackRequest, {foreignKey: "direct_request_id"});
+db.FastTrackRequest.hasMany(db.FastTrackBestMatch, { foreignKey: "direct_request_id", as: "bestMatches" });
+db.FastTrackBestMatch.belongsTo(db.FastTrackRequest, { foreignKey: "direct_request_id" });
 
-db.VehicleListing.hasMany(db.FastTrackBestMatch, {foreignKey: "vehicle_id"});
-db.FastTrackBestMatch.belongsTo(db.VehicleListing, {foreignKey: "vehicle_id", as: "vehicle"});
+db.VehicleListing.hasMany(db.FastTrackBestMatch, { foreignKey: "vehicle_id" });
+db.FastTrackBestMatch.belongsTo(db.VehicleListing, { foreignKey: "vehicle_id", as: "vehicle" });
 
-db.Customer.hasMany(db.FastTrackSale, {foreignKey: "customer_id"});
-db.FastTrackSale.belongsTo(db.Customer, {foreignKey: "customer_id", as: "customer"});
+db.Customer.hasMany(db.FastTrackSale, { foreignKey: "customer_id" });
+db.FastTrackSale.belongsTo(db.Customer, { foreignKey: "customer_id", as: "customer" });
 
-db.VehicleListing.hasMany(db.FastTrackSale, {foreignKey: "vehicle_id"});
-db.FastTrackSale.belongsTo(db.VehicleListing, {foreignKey: "vehicle_id", as: "vehicle"});
+db.VehicleListing.hasMany(db.FastTrackSale, { foreignKey: "vehicle_id" });
+db.FastTrackSale.belongsTo(db.VehicleListing, { foreignKey: "vehicle_id", as: "vehicle" });
 
-db.FastTrackRequest.hasMany(db.FastTrackSale, {foreignKey: "direct_request_id"});
-db.FastTrackSale.belongsTo(db.FastTrackRequest, {foreignKey: "direct_request_id", as: "directRequest"});
+db.FastTrackRequest.hasMany(db.FastTrackSale, { foreignKey: "direct_request_id" });
+db.FastTrackSale.belongsTo(db.FastTrackRequest, { foreignKey: "direct_request_id", as: "directRequest" });
 
-db.User.hasMany(db.FastTrackSale, {foreignKey: "call_agent_id"});
-db.FastTrackSale.belongsTo(db.User, {foreignKey: "call_agent_id", as: "callAgent"});
+db.User.hasMany(db.FastTrackSale, { foreignKey: "call_agent_id" });
+db.FastTrackSale.belongsTo(db.User, { foreignKey: "call_agent_id", as: "callAgent" });
 
-db.User.hasMany(db.FastTrackSale, {foreignKey: "assigned_sales_id"});
-db.FastTrackSale.belongsTo(db.User, {foreignKey: "assigned_sales_id", as: "salesUser"});
+db.User.hasMany(db.FastTrackSale, { foreignKey: "assigned_sales_id" });
+db.FastTrackSale.belongsTo(db.User, { foreignKey: "assigned_sales_id", as: "salesUser" });
 
-db.FastTrackSale.hasMany(db.FastTrackFollowup, {foreignKey: "sale_id", as: "followups"});
-db.FastTrackFollowup.belongsTo(db.FastTrackSale, {foreignKey: "sale_id", as: "sale"});
+db.FastTrackSale.hasMany(db.FastTrackFollowup, { foreignKey: "sale_id", as: "followups" });
+db.FastTrackFollowup.belongsTo(db.FastTrackSale, { foreignKey: "sale_id", as: "sale" });
 
-db.FastTrackSale.hasMany(db.FastTrackReminder, {foreignKey: "sale_id", as: "saleReminders"});
-db.FastTrackReminder.belongsTo(db.FastTrackSale, {foreignKey: "sale_id", as: "sale"});
+db.FastTrackSale.hasMany(db.FastTrackReminder, { foreignKey: "sale_id", as: "saleReminders" });
+db.FastTrackReminder.belongsTo(db.FastTrackSale, { foreignKey: "sale_id", as: "sale" });
 
-db.FastTrackRequest.hasMany(db.FastTrackReminder, {foreignKey: "direct_request_id", as: "directReminders"});
-db.FastTrackReminder.belongsTo(db.FastTrackRequest, {foreignKey: "direct_request_id", as: "directRequest"});
+db.FastTrackRequest.hasMany(db.FastTrackReminder, { foreignKey: "direct_request_id", as: "directReminders" });
+db.FastTrackReminder.belongsTo(db.FastTrackRequest, { foreignKey: "direct_request_id", as: "directRequest" });
 
 db.FastTrackSale.hasMany(db.FastTrackSaleHistory, {
     foreignKey: "fast_track_sale_id",
@@ -421,26 +438,26 @@ db.FastTrackReminder.belongsTo(db.User, {
 
 // service park
 
-db.Customer.hasMany(db.ServiceParkVehicleHistory, {foreignKey: "customer_id", as: "vehicleHistories"});
-db.ServiceParkVehicleHistory.belongsTo(db.Customer, {foreignKey: "customer_id", as: "customer"});
+db.Customer.hasMany(db.ServiceParkVehicleHistory, { foreignKey: "customer_id", as: "vehicleHistories" });
+db.ServiceParkVehicleHistory.belongsTo(db.Customer, { foreignKey: "customer_id", as: "customer" });
 
-db.Customer.hasMany(db.ServiceParkSale, {foreignKey: "customer_id", as: "serviceParkSales"});
-db.ServiceParkSale.belongsTo(db.Customer, {foreignKey: "customer_id", as: "customer"});
+db.Customer.hasMany(db.ServiceParkSale, { foreignKey: "customer_id", as: "serviceParkSales" });
+db.ServiceParkSale.belongsTo(db.Customer, { foreignKey: "customer_id", as: "customer" });
 
-db.ServiceParkVehicleHistory.hasMany(db.ServiceParkSale, {foreignKey: "vehicle_id", as: "sales"});
-db.ServiceParkSale.belongsTo(db.ServiceParkVehicleHistory, {foreignKey: "vehicle_id", as: "vehicle"});
+db.ServiceParkVehicleHistory.hasMany(db.ServiceParkSale, { foreignKey: "vehicle_id", as: "sales" });
+db.ServiceParkSale.belongsTo(db.ServiceParkVehicleHistory, { foreignKey: "vehicle_id", as: "vehicle" });
 
-db.User.hasMany(db.ServiceParkSale, {foreignKey: "sales_user_id", as: "serviceParkSales"});
-db.ServiceParkSale.belongsTo(db.User, {foreignKey: "sales_user_id", as: "salesUser"});
+db.User.hasMany(db.ServiceParkSale, { foreignKey: "sales_user_id", as: "serviceParkSales" });
+db.ServiceParkSale.belongsTo(db.User, { foreignKey: "sales_user_id", as: "salesUser" });
 
-db.User.hasMany(db.ServiceParkVehicleHistory, {foreignKey: "created_by", as: "createdVehicleHistories"});
-db.ServiceParkVehicleHistory.belongsTo(db.User, {foreignKey: "created_by", as: "createdBy"});
+db.User.hasMany(db.ServiceParkVehicleHistory, { foreignKey: "created_by", as: "createdVehicleHistories" });
+db.ServiceParkVehicleHistory.belongsTo(db.User, { foreignKey: "created_by", as: "createdBy" });
 
-db.ServiceParkSale.hasMany(db.ServiceParkSaleFollowUp, {foreignKey: "service_park_sale_id", as: "followups"});
-db.ServiceParkSaleFollowUp.belongsTo(db.ServiceParkSale, {foreignKey: "service_park_sale_id", as: "sale"});
+db.ServiceParkSale.hasMany(db.ServiceParkSaleFollowUp, { foreignKey: "service_park_sale_id", as: "followups" });
+db.ServiceParkSaleFollowUp.belongsTo(db.ServiceParkSale, { foreignKey: "service_park_sale_id", as: "sale" });
 
-db.ServiceParkSale.hasMany(db.ServiceParkSaleReminder, {foreignKey: "service_park_sale_id", as: "reminders"});
-db.ServiceParkSaleReminder.belongsTo(db.ServiceParkSale, {foreignKey: "service_park_sale_id", as: "sale"});
+db.ServiceParkSale.hasMany(db.ServiceParkSaleReminder, { foreignKey: "service_park_sale_id", as: "reminders" });
+db.ServiceParkSaleReminder.belongsTo(db.ServiceParkSale, { foreignKey: "service_park_sale_id", as: "sale" });
 
 
 db.ServiceParkSale.hasMany(db.ServiceParkSaleHistory, {
@@ -470,7 +487,7 @@ db.ServiceParkSaleReminder.belongsTo(db.User, {
 });
 
 // ServiceBookingAuth
-db.ServiceBookingAuth.belongsTo(db.Branch, {foreignKey: "branch_id", as: "branch"});
+db.ServiceBookingAuth.belongsTo(db.Branch, { foreignKey: "branch_id", as: "branch" });
 
 
 // db.Branch.belongsToMany(db.Service, {through: db.BranchService, foreignKey: 'branch_id', as: 'services'});
@@ -488,11 +505,11 @@ db.Service.belongsToMany(db.Branch, {
     as: 'branches'
 });
 
-db.Package.belongsToMany(db.Service, {through: db.PackageService, foreignKey: 'package_id', as: 'services'});
-db.Service.belongsToMany(db.Package, {through: db.PackageService, foreignKey: 'service_id', as: 'packages'});
+db.Package.belongsToMany(db.Service, { through: db.PackageService, foreignKey: 'package_id', as: 'services' });
+db.Service.belongsToMany(db.Package, { through: db.PackageService, foreignKey: 'service_id', as: 'packages' });
 
-db.Branch.hasMany(db.ServiceLine, {foreignKey: 'branch_id', as: 'serviceLines'});
-db.ServiceLine.belongsTo(db.Branch, {foreignKey: 'branch_id', as: 'branch'});
+db.Branch.hasMany(db.ServiceLine, { foreignKey: 'branch_id', as: 'serviceLines' });
+db.ServiceLine.belongsTo(db.Branch, { foreignKey: 'branch_id', as: 'branch' });
 
 db.Branch.hasMany(db.BranchUnavailableDate, {
     foreignKey: 'branch_id',
@@ -534,14 +551,14 @@ db.BranchUnavailableDate.belongsTo(db.Branch, {
 // });
 
 
-db.ServiceParkBooking.belongsTo(db.Branch, {foreignKey: 'branch_id'});
-db.Branch.hasMany(db.ServiceParkBooking, {foreignKey: 'branch_id'});
+db.ServiceParkBooking.belongsTo(db.Branch, { foreignKey: 'branch_id' });
+db.Branch.hasMany(db.ServiceParkBooking, { foreignKey: 'branch_id' });
 
-db.ServiceParkBooking.belongsTo(db.ServiceLine, {foreignKey: 'service_line_id'});
-db.ServiceLine.hasMany(db.ServiceParkBooking, {foreignKey: 'service_line_id'});
+db.ServiceParkBooking.belongsTo(db.ServiceLine, { foreignKey: 'service_line_id' });
+db.ServiceLine.hasMany(db.ServiceParkBooking, { foreignKey: 'service_line_id' });
 
-db.ServiceParkBooking.belongsTo(db.Customer, {foreignKey: 'customer_id'});
-db.Customer.hasMany(db.ServiceParkBooking, {foreignKey: 'customer_id'});
+db.ServiceParkBooking.belongsTo(db.Customer, { foreignKey: 'customer_id' });
+db.Customer.hasMany(db.ServiceParkBooking, { foreignKey: 'customer_id' });
 
 
 db.ServiceParkBooking.belongsTo(db.ServiceParkVehicleHistory, {
@@ -559,14 +576,14 @@ db.ServiceParkVehicleHistory.hasMany(db.ServiceParkBooking, {
 // unavailable items
 
 
-db.User.hasMany(db.UnavailableVehicleSale, {foreignKey: "call_agent_id", as: "unavailableVehicleCalls"});
-db.UnavailableVehicleSale.belongsTo(db.User, {foreignKey: "call_agent_id", as: "callAgent"});
+db.User.hasMany(db.UnavailableVehicleSale, { foreignKey: "call_agent_id", as: "unavailableVehicleCalls" });
+db.UnavailableVehicleSale.belongsTo(db.User, { foreignKey: "call_agent_id", as: "callAgent" });
 
-db.User.hasMany(db.UnavailableService, {foreignKey: "call_agent_id", as: "unavailableServiceCalls"});
-db.UnavailableService.belongsTo(db.User, {foreignKey: "call_agent_id", as: "callAgent"});
+db.User.hasMany(db.UnavailableService, { foreignKey: "call_agent_id", as: "unavailableServiceCalls" });
+db.UnavailableService.belongsTo(db.User, { foreignKey: "call_agent_id", as: "callAgent" });
 
-db.User.hasMany(db.UnavailableSparePart, {foreignKey: "call_agent_id", as: "unavailableSpareCalls"});
-db.UnavailableSparePart.belongsTo(db.User, {foreignKey: "call_agent_id", as: "callAgent"});
+db.User.hasMany(db.UnavailableSparePart, { foreignKey: "call_agent_id", as: "unavailableSpareCalls" });
+db.UnavailableSparePart.belongsTo(db.User, { foreignKey: "call_agent_id", as: "callAgent" });
 
 // chat
 // db.ChatSession.belongsTo(db.User, {foreignKey: "agent_id", as: "agent"});
@@ -575,8 +592,8 @@ db.UnavailableSparePart.belongsTo(db.User, {foreignKey: "call_agent_id", as: "ca
 // db.ChatSession.hasMany(db.ChatMessage, {foreignKey: "chat_id", sourceKey: "chat_id", as: "messages"});
 // db.ChatMessage.belongsTo(db.ChatSession, {foreignKey: "chat_id", targetKey: "chat_id", as: "session"});
 
-db.ChatSession.belongsTo(db.User, {foreignKey: "agent_id", as: "agent"});
-db.User.hasMany(db.ChatSession, {foreignKey: "agent_id", as: "assignedChats"});
+db.ChatSession.belongsTo(db.User, { foreignKey: "agent_id", as: "agent" });
+db.User.hasMany(db.ChatSession, { foreignKey: "agent_id", as: "assignedChats" });
 
 db.ChatSession.hasMany(db.ChatMessage, {
     foreignKey: "chat_id",
@@ -598,6 +615,36 @@ ActivityLog.belongsTo(User, {
 User.hasMany(ActivityLog, {
     foreignKey: 'user_id',
     as: 'activities'
+});
+
+
+// byd sale
+db.BydSale.belongsTo(db.Customer, { foreignKey: "customer_id", as: "customer" });
+db.BydSale.belongsTo(db.User, { foreignKey: "call_agent_id", as: "callAgent" });
+db.BydSale.belongsTo(db.User, { foreignKey: "assigned_sales_id", as: "salesUser" });
+
+db.BydSale.hasMany(db.BydSaleFollowup, { foreignKey: "bydSaleId", as: "followups" });
+db.BydSaleFollowup.belongsTo(db.BydSale, { foreignKey: "bydSaleId", as: "bydSale" });
+db.BydSaleFollowup.belongsTo(db.User, { foreignKey: "created_by", as: "creator" });
+
+db.BydSale.hasMany(db.BydSaleReminder, { foreignKey: "bydSaleId", as: "reminders" });
+db.BydSaleReminder.belongsTo(db.BydSale, { foreignKey: "bydSaleId", as: "bydSale" });
+db.BydSaleReminder.belongsTo(db.User, { foreignKey: "created_by", as: "creator" });
+
+db.BydSale.hasMany(db.BydSaleHistory, {
+    foreignKey: "byd_sale_id",
+    as: "history",
+    onDelete: "CASCADE",
+});
+
+db.BydSaleHistory.belongsTo(db.BydSale, {
+    foreignKey: "byd_sale_id",
+    as: "sale",
+});
+
+db.BydSaleHistory.belongsTo(db.User, {
+    foreignKey: "action_by",
+    as: "actor",
 });
 
 
