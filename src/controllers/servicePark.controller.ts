@@ -1027,6 +1027,46 @@ export const createServiceLine = async (req: Request, res: Response) => {
     }
 };
 
+export const getBranchServiceLines = async (req: Request, res: Response) => {
+    try {
+        const {branchId} = req.params;
+
+        // Validate branchId
+        const numericBranchId = Number(branchId);
+        if (!branchId || isNaN(numericBranchId)) {
+            return res.status(http.BAD_REQUEST).json({
+                error: "Invalid branchId"
+            });
+        }
+
+        // Verify branch exists
+        const branch = await Branch.findByPk(numericBranchId);
+        if (!branch) {
+            return res.status(http.NOT_FOUND).json({
+                error: "Branch not found"
+            });
+        }
+
+        // Query service lines for the branch
+        const serviceLines = await ServiceLine.findAll({
+            where: {
+                branch_id: numericBranchId
+            },
+            attributes: ['id', 'name', 'type', 'advisor'],
+            order: [['name', 'ASC']]
+        });
+
+        // Return array (empty array if no service lines exist)
+        return res.status(http.OK).json(serviceLines);
+
+    } catch (error: any) {
+        console.error("Get Branch Service Lines Error: ", error);
+        return res.status(http.INTERNAL_SERVER_ERROR).json({
+            error: error.message || "Internal server error"
+        });
+    }
+};
+
 export const updateService = async (req: Request, res: Response) => {
     try {
         const {id} = req.params;

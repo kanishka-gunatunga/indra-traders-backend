@@ -4,7 +4,7 @@ dotenv.config();
 const dbConfig = {
     DB: process.env.DATABASE || "edwin",
     USER: process.env.DB_USERNAME || "root",
-    PASSWORD: process.env.DB_PASSWORD || "Dinanjana3362",
+    PASSWORD: process.env.DB_PASSWORD || "password",
     HOST: process.env.HOST || "localhost",
     dialect: "mysql",
     // dialectOptions: {
