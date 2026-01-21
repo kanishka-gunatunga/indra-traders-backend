@@ -54,6 +54,7 @@ import BydSaleModel from "./bydSale.model";
 import BydSaleFollowupModel from "./bydSaleFollowup.model";
 import BydSaleReminderModel from "./bydSaleReminder.model";
 import BydSaleHistoryModel from "./bydSaleHistory.model";
+import BydUnavailableSaleModel from "./bydUnavailableSale.model";
 
 const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
     host: dbConfig.HOST,
@@ -79,6 +80,7 @@ const BydSale = BydSaleModel(sequelize);
 const BydSaleFollowup = BydSaleFollowupModel(sequelize);
 const BydSaleReminder = BydSaleReminderModel(sequelize);
 const BydSaleHistory = BydSaleHistoryModel(sequelize);
+const BydUnavailableSale = BydUnavailableSaleModel(sequelize);
 const User = UserModel(sequelize);
 const VehicleSaleFollowup = VehicleSaleFollowupModel(sequelize);
 
@@ -180,6 +182,7 @@ interface DB {
     BydSaleFollowup: typeof BydSaleFollowup;
     BydSaleReminder: typeof BydSaleReminder;
     BydSaleHistory: typeof BydSaleHistory;
+    BydUnavailableSale: typeof BydUnavailableSale;
 }
 
 
@@ -198,6 +201,7 @@ db.BydSale = BydSale;
 db.BydSaleFollowup = BydSaleFollowup;
 db.BydSaleReminder = BydSaleReminder;
 db.BydSaleHistory = BydSaleHistory;
+db.BydUnavailableSale = BydUnavailableSale;
 db.User = User;
 
 // vehicle sale
@@ -584,6 +588,9 @@ db.UnavailableService.belongsTo(db.User, { foreignKey: "call_agent_id", as: "cal
 
 db.User.hasMany(db.UnavailableSparePart, { foreignKey: "call_agent_id", as: "unavailableSpareCalls" });
 db.UnavailableSparePart.belongsTo(db.User, { foreignKey: "call_agent_id", as: "callAgent" });
+
+db.User.hasMany(db.BydUnavailableSale, { foreignKey: "call_agent_id", as: "unavailableBydVehicleCalls" });
+db.BydUnavailableSale.belongsTo(db.User, { foreignKey: "call_agent_id", as: "callAgent" });
 
 // chat
 // db.ChatSession.belongsTo(db.User, {foreignKey: "agent_id", as: "agent"});

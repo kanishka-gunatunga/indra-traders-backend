@@ -6,7 +6,7 @@ import { Op } from "sequelize";
 import { logActivity } from "../services/logActivity";
 import { sendNotification } from "../services/notification";
 
-const { User, BydSale, Customer, BydSaleFollowup, BydSaleReminder, BydSaleHistory } = db;
+const { User, BydSale, Customer, BydSaleFollowup, BydSaleReminder, BydSaleHistory, BydUnavailableSale } = db;
 
 const getLevelFromRole = (role: string): number => {
     if (role === "SALES01") return 1;
@@ -687,5 +687,50 @@ export const deleteBydReminder = async (req: Request, res: Response) => {
     } catch (error) {
         console.error("Error deleting reminder:", error);
         res.status(500).json({ message: "Server error" });
+    }
+};
+
+export const createBydUnavailableSale = async (req: Request, res: Response) => {
+    try {
+        const {
+            call_agent_id,
+            vehicle_model,
+            manufacture_year,
+            color,
+            type,
+            down_payment,
+            price_from,
+            price_to,
+        } = req.body;
+
+        if (!call_agent_id) {
+            return res.status(http.BAD_REQUEST).json({ message: "Call Agent ID is required" });
+        }
+
+        const sale = await BydUnavailableSale.create({
+            call_agent_id,
+            vehicle_model,
+            manufacture_year,
+            color,
+            type,
+            down_payment,
+            price_from,
+            price_to,
+        });
+
+        res.status(http.CREATED).json(sale);
+    } catch (error) {
+        console.error("Error creating unavailable BYD sale:", error);
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
+    }
+};
+
+export const getAllBydUnavailableSales = async (_req: Request, res: Response) => {
+    try {
+        const data = await BydUnavailableSale.findAll({ order: [["createdAt", "DESC"]] });
+        res.status(http.OK).json(data);
+    } catch (error) {
+        console.error("Error fetching unavailable BYD sales:", error);
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };

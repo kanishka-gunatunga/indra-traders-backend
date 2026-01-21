@@ -15,11 +15,17 @@ import {
     getSaleHistory,
     getNearestRemindersBySalesUser,
     getBydSaleByTicket,
-    updateBydSalePriority
+    updateBydSalePriority,
+    createBydUnavailableSale,
+    getAllBydUnavailableSales
 } from "../controllers/bydSale.controller";
 
 
 const router = express.Router();
+
+// Unavailable
+router.post("/unavailable", createBydUnavailableSale);
+router.get("/unavailable", getAllBydUnavailableSales);
 
 // Sales Endpoints
 router.post("/", createBydSale);
@@ -43,5 +49,7 @@ router.delete("/followups/:id", deleteBydFollowUp);
 router.post("/reminders", createBydReminder);
 router.get("/reminders/sale/:bydSaleId", getBydRemindersBySaleId);
 router.delete("/reminders/:id", deleteBydReminder);
+
+
 
 export default router;
