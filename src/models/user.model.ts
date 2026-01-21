@@ -8,7 +8,7 @@ interface UserAttributes {
     full_name: string;
     contact_no: string;
     email: string;
-    user_role: "SALES01" | "SALES02" | "SALES03" | "CALLAGENT" | "ADMIN" | "TELEMARKETER";
+    user_role: "SALES01" | "SALES02" | "SALES03" | "CALLAGENT" | "ADMIN" | "TELEMARKETER" | "SERVICE_CENTER_STAFF";
     department: "ITPL" | "ISP" | "IMS" | "IFT";
     branch: "BAMBALAPITIYA" | "KANDY" | "JAFFNA" | "GALLE" | "NEGOMBO";
     password: string;
@@ -23,7 +23,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
     public full_name!: string;
     public contact_no!: string;
     public email!: string;
-    public user_role!: "SALES01" | "SALES02" | "SALES03" | "CALLAGENT" | "ADMIN" | "TELEMARKETER";
+    public user_role!: "SALES01" | "SALES02" | "SALES03" | "CALLAGENT" | "ADMIN" | "TELEMARKETER" | "SERVICE_CENTER_STAFF";
     public department!: "ITPL" | "ISP" | "IMS" | "IFT";
     public branch!: "BAMBALAPITIYA" | "KANDY" | "JAFFNA" | "GALLE" | "NEGOMBO";
     public password!: string;
@@ -52,7 +52,7 @@ export default (sequelize: Sequelize) => {
                 // unique: true,
             },
             user_role: {
-                type: DataTypes.ENUM("SALES01", "SALES02", "SALES03", "CALLAGENT", "ADMIN", "TELEMARKETER"),
+                type: DataTypes.ENUM("SALES01", "SALES02", "SALES03", "CALLAGENT", "ADMIN", "TELEMARKETER", "SERVICE_CENTER_STAFF"),
                 allowNull: false,
             },
             department: {
