@@ -205,14 +205,53 @@ export const getBydSales = async (req: Request, res: Response) => {
         const userBranch = currentUser.branch;
 
         const userLevel = getLevelFromRole(userRole);
-        const statusParam = req.query.status;
+
+        const statusParam = req.query.status as string;
+        const search = req.query.search as string;
+        const priority = req.query.priority as string;
+        const startDate = req.query.startDate as string;
+        const endDate = req.query.endDate as string;
+
+        // const statusParam = req.query.status;
         const status = typeof statusParam === "string" ? statusParam.toUpperCase() : undefined;
 
         let whereClause: any = {};
 
+        if (search) {
+            whereClause[Op.or] = [
+                { ticket_number: { [Op.like]: `%${search}%` } },
+                { '$customer.customer_name$': { [Op.like]: `%${search}%` } },
+                { '$customer.phone_number$': { [Op.like]: `%${search}%` } },
+                { '$customer.email$': { [Op.like]: `%${search}%` } }
+            ];
+        }
+
+        if (priority) {
+            // Assuming priority passed as "P0", "P1" etc. or just number "0", "1"
+            const pVal = priority.toUpperCase().replace("P", "");
+            if (!isNaN(Number(pVal))) {
+                whereClause.priority = Number(pVal);
+            }
+        }
+
+        if (startDate && endDate) {
+            whereClause.date = {
+                [Op.between]: [new Date(startDate), new Date(endDate)]
+            };
+        } else if (startDate) {
+            whereClause.date = {
+                [Op.gte]: new Date(startDate)
+            };
+        } else if (endDate) {
+            whereClause.date = {
+                [Op.lte]: new Date(endDate)
+            };
+        }
+
+
         // --- ADMIN VIEW (See All) ---
         if (userRole === "ADMIN") {
-            if (status) whereClause.status = status;
+            if (status && status !== "ALL STATUS") whereClause.status = status;
         }
 
         // --- SALES AGENT VIEW ---
@@ -224,7 +263,7 @@ export const getBydSales = async (req: Request, res: Response) => {
                 whereClause.current_level = userLevel;
 
                 // RULE 2 & 3: Pool vs Assignment
-                if (status) {
+                if (status && status !== "ALL STATUS") {
                     // Case A: Filtering by specific status tab (e.g., clicking "Ongoing" tab)
                     if (status === "NEW") {
                         // Shared Pool: See ALL 'NEW' leads at this level
@@ -238,8 +277,9 @@ export const getBydSales = async (req: Request, res: Response) => {
                     // Case B: Dashboard / Kanban View (No status filter passed)
                     // Show: (Any 'NEW' lead at this level) OR (Any lead at this level assigned to me)
                     whereClause[Op.and] = [
-                        { current_level: userLevel },
-                        { branch: userBranch },
+                        ...(whereClause[Op.and] || []),
+                        // { current_level: userLevel },
+                        // { branch: userBranch },
                         {
                             [Op.or]: [
                                 { status: "NEW" },
