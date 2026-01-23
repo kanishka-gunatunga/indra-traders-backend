@@ -1,4 +1,4 @@
-import {Router} from "express";
+import { Router } from "express";
 import {
     createAssignToSale,
     assignToSalesAgent,
@@ -30,8 +30,10 @@ import {
     getAllPackages, updateBranch, deleteBranch, getBranchCatalog,
     validatePromoCode, getAvailablePromos,
     getMonthlyAvailability, createBooking, getDailySlots,
-    getBranchServiceLines
+    getBranchServiceLines,
+    getBookingById, cancelBooking, rescheduleBooking
 } from "../controllers/servicePark.controller";
+import { getScheduledServices } from "../controllers/serviceBooking.controller";
 
 const router = Router();
 
@@ -71,6 +73,7 @@ router.get("/branches/:branchId/catalog", getBranchCatalog);
 router.post('/bookings/', createBooking);
 router.get('/bookings/availability', getMonthlyAvailability);
 router.get('/bookings/daily', getDailySlots);
+router.get('/bookings/scheduled', getScheduledServices);
 
 
 router.post("/validate-promo", validatePromoCode);
@@ -86,5 +89,10 @@ router.put("/priority/:id", updatePriority);
 router.get("/:id/history", getSaleHistory);
 router.put("/:id/promote", promoteToNextLevel);
 
+
+
+router.get("/bookings/:id", getBookingById);
+router.post("/bookings/:id/cancel", cancelBooking);
+router.post("/bookings/:id/reschedule", rescheduleBooking);
 
 export default router;
