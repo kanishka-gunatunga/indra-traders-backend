@@ -1,10 +1,10 @@
-import {Request, Response} from "express";
+import { Request, Response } from "express";
 import db from "../models";
 import http from "http-status-codes";
-import {Op} from "sequelize";
+import { Op } from "sequelize";
 import dayjs from "dayjs";
-import {logActivity} from "../services/logActivity";
-import {sendNotification} from "../services/notification";
+import { logActivity } from "../services/logActivity";
+import { sendNotification } from "../services/notification";
 
 
 const {
@@ -35,9 +35,9 @@ const getLevelFromRole = (role: string): number => {
 
 
 export const handleCustomerAndVehicle = async (data: any) => {
-    const {phone_number, customer_name, vehicle_no, ...rest} = data;
+    const { phone_number, customer_name, vehicle_no, ...rest } = data;
 
-    let customer = await Customer.findOne({where: {phone_number}});
+    let customer = await Customer.findOne({ where: { phone_number } });
     if (!customer) {
         customer = await Customer.create({
             id: `CUS${Date.now()}`,
@@ -47,10 +47,10 @@ export const handleCustomerAndVehicle = async (data: any) => {
         });
     }
 
-    let vehicle = await ServiceParkVehicleHistory.findOne({where: {vehicle_no}});
+    let vehicle = await ServiceParkVehicleHistory.findOne({ where: { vehicle_no } });
 
     if (vehicle) {
-        await vehicle.update({...rest, customer_id: customer.id});
+        await vehicle.update({ ...rest, customer_id: customer.id });
     } else {
         vehicle = await ServiceParkVehicleHistory.create({
             // id: Date.now(),
@@ -60,7 +60,7 @@ export const handleCustomerAndVehicle = async (data: any) => {
         });
     }
 
-    return {customer, vehicle};
+    return { customer, vehicle };
 };
 
 export const handleServiceIntake = async (req: Request, res: Response) => {
@@ -85,7 +85,7 @@ export const handleServiceIntake = async (req: Request, res: Response) => {
         });
     } catch (err: any) {
         console.error(err);
-        return res.status(500).json({error: "Failed to process intake", detail: err.message});
+        return res.status(500).json({ error: "Failed to process intake", detail: err.message });
     }
 };
 
@@ -159,7 +159,7 @@ export const createAssignToSale = async (req: Request, res: Response) => {
         const creatorUser = await User.findByPk(creatorId);
 
         if (!creatorUser) {
-            return res.status(http.BAD_REQUEST).json({message: "Creator user not found"});
+            return res.status(http.BAD_REQUEST).json({ message: "Creator user not found" });
         }
 
         const userBranch = creatorUser.branch;
@@ -168,7 +168,7 @@ export const createAssignToSale = async (req: Request, res: Response) => {
         let finalVehicleId = vehicle_id;
 
         if (is_self_assigned && !customer_id) {
-            let customer = await Customer.findOne({where: {phone_number: contact_number}, transaction: t});
+            let customer = await Customer.findOne({ where: { phone_number: contact_number }, transaction: t });
             if (!customer) {
                 customer = await Customer.create({
                     id: `CUS${Date.now()}`,
@@ -177,7 +177,7 @@ export const createAssignToSale = async (req: Request, res: Response) => {
                     email,
                     city,
                     lead_source: lead_source || "Direct Walk-in"
-                } as any, {transaction: t});
+                } as any, { transaction: t });
             }
 
             finalCustomerId = customer.id;
@@ -195,7 +195,7 @@ export const createAssignToSale = async (req: Request, res: Response) => {
                 created_by: sales_user_id,
                 // You might want to add 'make' and 'model' to VehicleHistory attributes if not present,
                 // or just store them in the Sale record as snapshots.
-            }, {transaction: t});
+            }, { transaction: t });
 
             finalVehicleId = vehicle.id;
         }
@@ -234,7 +234,7 @@ export const createAssignToSale = async (req: Request, res: Response) => {
             status,
             sales_user_id: assignedId,
             current_level: currentLevel
-        }, {transaction: t});
+        }, { transaction: t });
 
         if (assignedId && db.ServiceParkSaleHistory) {
             await db.ServiceParkSaleHistory.create({
@@ -245,7 +245,7 @@ export const createAssignToSale = async (req: Request, res: Response) => {
                 new_level: currentLevel,
                 details: `Lead created and self-assigned by Sales Agent`,
                 timestamp: new Date()
-            } as any, {transaction: t});
+            } as any, { transaction: t });
         }
 
         // const ticket_number = `ISP${Date.now()}`;
@@ -290,21 +290,21 @@ export const createAssignToSale = async (req: Request, res: Response) => {
         }
 
 
-        res.status(201).json({message: "Sale assigned", sale: newSale});
+        res.status(201).json({ message: "Sale assigned", sale: newSale });
     } catch (error) {
         console.error(error);
-        res.status(500).json({error: "Failed to create assign-to-sale"});
+        res.status(500).json({ error: "Failed to create assign-to-sale" });
     }
 };
 
 
 export const assignToSalesAgent = async (req: Request, res: Response) => {
     try {
-        const {saleId} = req.params;
-        const {userId} = req.body;
+        const { saleId } = req.params;
+        const { userId } = req.body;
 
         const sale = await ServiceParkSale.findByPk(saleId);
-        if (!sale) return res.status(404).json({error: "Sale not found"});
+        if (!sale) return res.status(404).json({ error: "Sale not found" });
 
         sale.sales_user_id = userId;
         sale.status = "ONGOING";
@@ -318,104 +318,104 @@ export const assignToSalesAgent = async (req: Request, res: Response) => {
             actionType: "ASSIGN",
             entityId: sale.id,
             description: `Service Sale reassigned to User ID ${userId}`,
-            changes: {new_sales_user_id: userId}
+            changes: { new_sales_user_id: userId }
         });
 
 
-        res.json({message: "Sale assigned to agent", sale});
+        res.json({ message: "Sale assigned to agent", sale });
     } catch (err) {
         console.error(err);
-        res.status(500).json({error: "Failed to assign sale"});
+        res.status(500).json({ error: "Failed to assign sale" });
     }
 };
 
 
 export const getSaleDetails = async (req: Request, res: Response) => {
     try {
-        const {saleId} = req.params;
+        const { saleId } = req.params;
 
         const sale = await ServiceParkSale.findByPk(saleId, {
             include: [
-                {model: Customer, as: "customer"},
-                {model: ServiceParkVehicleHistory, as: "vehicle"},
+                { model: Customer, as: "customer" },
+                { model: ServiceParkVehicleHistory, as: "vehicle" },
                 {
                     model: ServiceParkSaleFollowUp, as: "followups",
                     include: [
-                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                        { model: User, as: "creator", attributes: ["full_name", "user_role"] }
                     ]
                 },
                 {
                     model: ServiceParkSaleReminder, as: "reminders",
                     include: [
-                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                        { model: User, as: "creator", attributes: ["full_name", "user_role"] }
                     ]
                 },
-                {model: User, attributes: ["id", "full_name", "email"]},
+                { model: User, attributes: ["id", "full_name", "email"] },
             ],
         });
 
-        if (!sale) return res.status(404).json({error: "Sale not found"});
+        if (!sale) return res.status(404).json({ error: "Sale not found" });
         res.json(sale);
     } catch (err) {
-        res.status(500).json({error: "Failed to fetch sale details"});
+        res.status(500).json({ error: "Failed to fetch sale details" });
     }
 };
 
 export const getSaleDetailsByTicket = async (req: Request, res: Response) => {
     try {
-        const {ticketNumber} = req.params;
+        const { ticketNumber } = req.params;
         const saleDetails = await ServiceParkSale.findOne({
-            where: {ticket_number: ticketNumber},
+            where: { ticket_number: ticketNumber },
             include: [
-                {model: Customer, as: "customer"},
-                {model: ServiceParkVehicleHistory, as: "vehicle"},
+                { model: Customer, as: "customer" },
+                { model: ServiceParkVehicleHistory, as: "vehicle" },
                 {
                     model: ServiceParkSaleFollowUp, as: "followups",
                     include: [
-                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                        { model: User, as: "creator", attributes: ["full_name", "user_role"] }
                     ]
                 },
                 {
                     model: ServiceParkSaleReminder, as: "reminders",
                     include: [
-                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                        { model: User, as: "creator", attributes: ["full_name", "user_role"] }
                     ]
                 },
-                {model: User, attributes: ["id", "full_name", "email"], as: "salesUser"},
+                { model: User, attributes: ["id", "full_name", "email"], as: "salesUser" },
             ]
         });
 
         if (!saleDetails) {
-            return res.status(http.NOT_FOUND).json({error: "Sale not found"});
+            return res.status(http.NOT_FOUND).json({ error: "Sale not found" });
         }
 
         return res.status(http.OK).json(saleDetails);
     } catch (err: any) {
         console.error(err);
-        return res.status(500).json({message: "Internal server error", error: err.message});
+        return res.status(500).json({ message: "Internal server error", error: err.message });
     }
 }
 
 
 export const getVehicleHistoryByNumber = async (req: Request, res: Response) => {
     try {
-        const {vehicleNo} = req.params;
+        const { vehicleNo } = req.params;
         const history = await ServiceParkVehicleHistory.findOne({
-            where: {vehicle_no: vehicleNo},
+            where: { vehicle_no: vehicleNo },
             include: [
-                {model: Customer, as: "customer"},
-                {model: User, as: "createdBy", attributes: ["full_name", "email", "user_role"]},
+                { model: Customer, as: "customer" },
+                { model: User, as: "createdBy", attributes: ["full_name", "email", "user_role"] },
             ],
         });
 
         if (!history) {
-            return res.status(404).json({message: "Vehicle history not found"});
+            return res.status(404).json({ message: "Vehicle history not found" });
         }
 
-        return res.status(200).json({data: history});
+        return res.status(200).json({ data: history });
     } catch (error: any) {
         console.error(error);
-        return res.status(500).json({message: "Internal server error", error: error.message});
+        return res.status(500).json({ message: "Internal server error", error: error.message });
     }
 };
 
@@ -424,15 +424,15 @@ export const listVehicleHistories = async (req: Request, res: Response) => {
     try {
         const histories = await ServiceParkVehicleHistory.findAll({
             include: [
-                {model: Customer, as: "customer"},
-                {model: User, as: "createdBy", attributes: ["full_name", "email", "user_role"]},
+                { model: Customer, as: "customer" },
+                { model: User, as: "createdBy", attributes: ["full_name", "email", "user_role"] },
             ],
         });
 
-        return res.status(200).json({data: histories});
+        return res.status(200).json({ data: histories });
     } catch (error: any) {
         console.error(error);
-        return res.status(500).json({message: "Internal server error", error: error.message});
+        return res.status(500).json({ message: "Internal server error", error: error.message });
     }
 };
 
@@ -498,7 +498,7 @@ export const listServiceParkSales = async (req: Request, res: Response) => {
         const currentUser = await User.findByPk(userId);
 
         if (!currentUser) {
-            return res.status(http.UNAUTHORIZED).json({message: "User not authenticated"});
+            return res.status(http.UNAUTHORIZED).json({ message: "User not authenticated" });
         }
 
         const userRole = (req as any).user?.user_role || req.query.userRole;
@@ -506,23 +506,59 @@ export const listServiceParkSales = async (req: Request, res: Response) => {
 
         const userLevel = getLevelFromRole(userRole);
 
-        const statusParam = req.query.status;
-        const status = typeof statusParam === "string" ? statusParam.toUpperCase() : undefined;
+        // --- FILTER PARAMS ---
+        const statusParam = req.query.status as string;
+        const search = req.query.search as string;
+        const priority = req.query.priority as string;
+        const startDate = req.query.startDate as string;
+        const endDate = req.query.endDate as string;
 
+        const status = typeof statusParam === "string" ? statusParam.toUpperCase() : undefined;
 
         let whereClause: any = {};
 
-        if (userRole === "ADMIN") {
-            if (status) whereClause.status = status;
-        } else {
+        // 1. Base Filters (Search, Priority, Date)
+        if (search) {
+            whereClause[Op.or] = [
+                { ticket_number: { [Op.like]: `%${search}%` } },
+                { '$customer.customer_name$': { [Op.like]: `%${search}%` } },
+                { '$customer.phone_number$': { [Op.like]: `%${search}%` } },
+                { '$customer.email$': { [Op.like]: `%${search}%` } }
+            ];
+        }
 
+        if (priority) {
+            const pVal = priority.toUpperCase().replace("P", "");
+            if (!isNaN(Number(pVal))) {
+                whereClause.priority = Number(pVal);
+            }
+        }
+
+        if (startDate && endDate) {
+            whereClause.date = {
+                [Op.between]: [new Date(startDate), new Date(endDate)]
+            };
+        } else if (startDate) {
+            whereClause.date = {
+                [Op.gte]: new Date(startDate)
+            };
+        } else if (endDate) {
+            whereClause.date = {
+                [Op.lte]: new Date(endDate)
+            };
+        }
+
+
+        // 2. Role Based Access Control & Status Filtering
+        if (userRole === "ADMIN") {
+            if (status && status !== "ALL STATUS") whereClause.status = status;
+        } else {
             whereClause.branch = userBranch;
             if (userLevel > 0) {
 
                 whereClause.current_level = userLevel;
 
-                if (status) {
-
+                if (status && status !== "ALL STATUS") {
                     if (status === "NEW") {
                         whereClause.status = "NEW";
                     } else {
@@ -531,15 +567,14 @@ export const listServiceParkSales = async (req: Request, res: Response) => {
                     }
                 } else {
                     whereClause[Op.and] = [
-                        {current_level: userLevel},
-                        {branch: userBranch},
+                        ...(whereClause[Op.and] || []),
                         {
                             [Op.or]: [
-                                {status: "NEW"},
+                                { status: "NEW" },
                                 {
                                     [Op.and]: [
-                                        {status: {[Op.ne]: "NEW"}},
-                                        {sales_user_id: userId}
+                                        { status: { [Op.ne]: "NEW" } },
+                                        { sales_user_id: userId }
                                     ]
                                 }
                             ]
@@ -563,17 +598,17 @@ export const listServiceParkSales = async (req: Request, res: Response) => {
         const sales = await ServiceParkSale.findAll({
             where: whereClause,
             include: [
-                {model: Customer, as: "customer"},
-                {model: ServiceParkVehicleHistory, as: "vehicle"},
-                {model: User, as: "salesUser", attributes: ["id", "full_name", "email"]},
+                { model: Customer, as: "customer" },
+                { model: ServiceParkVehicleHistory, as: "vehicle" },
+                { model: User, as: "salesUser", attributes: ["id", "full_name", "email"] },
             ],
             order: [["createdAt", "DESC"]]
         });
 
-        return res.status(200).json({data: sales});
+        return res.status(200).json({ data: sales });
     } catch (error: any) {
         console.error(error);
-        return res.status(500).json({message: "Internal server error", error: error.message});
+        return res.status(500).json({ message: "Internal server error", error: error.message });
     }
 };
 
@@ -581,13 +616,13 @@ export const listServiceParkSales = async (req: Request, res: Response) => {
 export const promoteToNextLevel = async (req: Request, res: Response) => {
     const t = await db.sequelize.transaction();
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const userId = (req as any).user?.id || req.body.userId;
 
         const sale = await ServiceParkSale.findByPk(id);
         if (!sale) {
             await t.rollback();
-            return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+            return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
         }
 
         const currentLevel = sale.current_level;
@@ -595,13 +630,13 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
 
         if (nextLevel > 3) {
             await t.rollback();
-            return res.status(http.BAD_REQUEST).json({message: "Already at maximum sales level"});
+            return res.status(http.BAD_REQUEST).json({ message: "Already at maximum sales level" });
         }
 
         sale.status = "NEW";
         sale.current_level = nextLevel;
         sale.sales_user_id = null;
-        await sale.save({transaction: t});
+        await sale.save({ transaction: t });
 
         await ServiceParkSaleHistory.create({
             service_park_sale_id: sale.id,
@@ -611,7 +646,7 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
             new_level: nextLevel,
             details: `Lead escalated from Level ${currentLevel} to Level ${nextLevel}`,
             timestamp: new Date()
-        } as any, {transaction: t});
+        } as any, { transaction: t });
 
         await t.commit();
 
@@ -622,38 +657,38 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
             actionType: "UPDATE",
             entityId: sale.id,
             description: `Job escalated to Level ${nextLevel}`,
-            changes: {ticket: sale.ticket_number, previousLevel: currentLevel}
+            changes: { ticket: sale.ticket_number, previousLevel: currentLevel }
         });
 
 
-        res.status(http.OK).json({message: `Lead promoted to Sales Level ${nextLevel}`, sale});
+        res.status(http.OK).json({ message: `Lead promoted to Sales Level ${nextLevel}`, sale });
 
     } catch (error) {
         await t.rollback();
         console.error("Error promoting sale:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
 export const getSaleHistory = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const history = await ServiceParkSaleHistory.findAll({
-            where: {service_park_sale_id: id},
+            where: { service_park_sale_id: id },
             order: [["timestamp", "DESC"]],
-            include: [{model: User, as: "actor", attributes: ['full_name', 'user_role']}]
+            include: [{ model: User, as: "actor", attributes: ['full_name', 'user_role'] }]
         });
         res.status(http.OK).json(history);
     } catch (error) {
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error fetching history"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching history" });
     }
 };
 
 
 export const updateSaleStatus = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
-        const {status} = req.body;
+        const { id } = req.params;
+        const { status } = req.body;
 
         if (!["WON", "LOST", "ONGOING"].includes(status)) {
             return res.status(http.BAD_REQUEST).json({
@@ -663,7 +698,7 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
 
         const sale = await ServiceParkSale.findByPk(id);
         if (!sale) {
-            return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+            return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
         }
 
         const oldStatus = sale.status;
@@ -678,7 +713,7 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
             actionType: "STATUS_CHANGE",
             entityId: sale.id,
             description: `Status updated from ${oldStatus} to ${status}`,
-            changes: {ticket: sale.ticket_number, status}
+            changes: { ticket: sale.ticket_number, status }
         });
 
         return res.status(http.OK).json({
@@ -687,14 +722,14 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
         });
     } catch (err) {
         console.error("updateSaleStatus error:", err);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
 
 export const createFollowup = async (req: Request, res: Response) => {
     try {
-        const {activity, activity_date, service_park_sale_id, userId} = req.body;
+        const { activity, activity_date, service_park_sale_id, userId } = req.body;
 
         const followup = await ServiceParkSaleFollowUp.create({
             activity,
@@ -704,19 +739,19 @@ export const createFollowup = async (req: Request, res: Response) => {
         });
 
         const fullFollowup = await ServiceParkSaleFollowUp.findByPk(followup.id, {
-            include: [{model: User, as: "creator", attributes: ["full_name"]}]
+            include: [{ model: User, as: "creator", attributes: ["full_name"] }]
         });
 
-        res.status(201).json({message: "Follow-up created", followup: fullFollowup});
+        res.status(201).json({ message: "Follow-up created", followup: fullFollowup });
     } catch (error) {
         console.error("Error creating follow-up:", error);
-        res.status(500).json({message: "Server error"});
+        res.status(500).json({ message: "Server error" });
     }
 };
 
 export const createReminder = async (req: Request, res: Response) => {
     try {
-        const {task_title, task_date, note, service_park_sale_id, userId} = req.body;
+        const { task_title, task_date, note, service_park_sale_id, userId } = req.body;
 
         const followup = await ServiceParkSaleReminder.create({
             task_title,
@@ -727,27 +762,27 @@ export const createReminder = async (req: Request, res: Response) => {
         });
 
         const fullFollowup = await ServiceParkSaleReminder.findByPk(followup.id, {
-            include: [{model: User, as: "creator", attributes: ["full_name"]}]
+            include: [{ model: User, as: "creator", attributes: ["full_name"] }]
         });
 
-        res.status(201).json({message: "Follow-up created", followup: fullFollowup});
+        res.status(201).json({ message: "Follow-up created", followup: fullFollowup });
     } catch (error) {
         console.error("Error creating follow-up:", error);
-        res.status(500).json({message: "Server error"});
+        res.status(500).json({ message: "Server error" });
     }
 };
 
 
 export const getNearestRemindersBySalesUser = async (req: Request, res: Response) => {
     try {
-        const {userId} = req.params;
+        const { userId } = req.params;
 
         if (!userId) {
-            return res.status(400).json({message: "User ID is required"});
+            return res.status(400).json({ message: "User ID is required" });
         }
 
         const salesWithReminders = await ServiceParkSale.findAll({
-            where: {sales_user_id: userId},
+            where: { sales_user_id: userId },
             include: [
                 {
                     model: ServiceParkSaleReminder,
@@ -766,7 +801,7 @@ export const getNearestRemindersBySalesUser = async (req: Request, res: Response
                     attributes: ["customer_name", "phone_number", "email"],
                 },
             ],
-            order: [[{model: ServiceParkSaleReminder, as: "reminders"}, "task_date", "ASC"]],
+            order: [[{ model: ServiceParkSaleReminder, as: "reminders" }, "task_date", "ASC"]],
         });
 
         const nearestReminders = salesWithReminders.flatMap((sale: any) =>
@@ -786,28 +821,28 @@ export const getNearestRemindersBySalesUser = async (req: Request, res: Response
             (a, b) => new Date(a.task_date).getTime() - new Date(b.task_date).getTime()
         );
 
-        return res.status(200).json({data: nearestReminders});
+        return res.status(200).json({ data: nearestReminders });
     } catch (error: any) {
         console.error("getNearestRemindersBySalesUser error:", error);
         return res
             .status(500)
-            .json({message: "Internal server error", error: error.message});
+            .json({ message: "Internal server error", error: error.message });
     }
 };
 
 export const updatePriority = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
-        const {priority} = req.body;
+        const { id } = req.params;
+        const { priority } = req.body;
 
         if (priority === undefined || isNaN(priority)) {
-            return res.status(400).json({message: "Valid priority is required"});
+            return res.status(400).json({ message: "Valid priority is required" });
         }
 
         const sale = await ServiceParkSale.findByPk(id);
 
         if (!sale) {
-            return res.status(404).json({message: "Sale not found"});
+            return res.status(404).json({ message: "Sale not found" });
         }
 
         sale.priority = priority;
@@ -819,24 +854,24 @@ export const updatePriority = async (req: Request, res: Response) => {
             actionType: "UPDATE",
             entityId: sale.id,
             description: `Priority updated to P${priority}`,
-            changes: {ticket: sale.ticket_number, priority}
+            changes: { ticket: sale.ticket_number, priority }
         });
 
-        return res.status(200).json({message: "Priority updated", sale});
+        return res.status(200).json({ message: "Priority updated", sale });
     } catch (err) {
         console.error("updatePriority error:", err);
-        res.status(500).json({message: "Server error"});
+        res.status(500).json({ message: "Server error" });
     }
 };
 
 
 export const createService = async (req: Request, res: Response) => {
     try {
-        const {name, type, description, base_price} = req.body;
-        const service = await Service.create({name, type, description, base_price});
-        return res.status(http.CREATED).json({message: "Service created", service});
+        const { name, type, description, base_price } = req.body;
+        const service = await Service.create({ name, type, description, base_price });
+        return res.status(http.CREATED).json({ message: "Service created", service });
     } catch (error: any) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error creating service", error: error.message});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error creating service", error: error.message });
     }
 };
 
@@ -845,22 +880,22 @@ export const getAllServices = async (req: Request, res: Response) => {
         const services = await Service.findAll();
         return res.status(http.OK).json(services);
     } catch (error) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error fetching services"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching services" });
     }
 };
 
 export const createPackage = async (req: Request, res: Response) => {
     const t = await db.sequelize.transaction();
     try {
-        const {name, short_description, description, serviceIds} = req.body; // serviceIds = [1, 2, 5]
+        const { name, short_description, description, serviceIds } = req.body; // serviceIds = [1, 2, 5]
 
         const services = await Service.findAll({
-            where: {id: serviceIds}
+            where: { id: serviceIds }
         });
 
         if (!services || services.length === 0) {
             await t.rollback();
-            return res.status(400).json({message: "No valid services selected"});
+            return res.status(400).json({ message: "No valid services selected" });
         }
 
         const totalPrice = services.reduce((sum: number, svc: any) => sum + Number(svc.base_price), 0);
@@ -870,12 +905,12 @@ export const createPackage = async (req: Request, res: Response) => {
             short_description,
             description,
             total_price: totalPrice
-        }, {transaction: t});
+        }, { transaction: t });
 
-        await (newPackage as any).addServices(serviceIds, {transaction: t});
+        await (newPackage as any).addServices(serviceIds, { transaction: t });
 
         await t.commit();
-        return res.status(201).json({message: "Package created successfully", package: newPackage});
+        return res.status(201).json({ message: "Package created successfully", package: newPackage });
     } catch (error: any) {
         await t.rollback();
         console.error("Create Package Error:", error.parent?.sqlMessage || error.message);
@@ -899,7 +934,7 @@ export const createBranch = async (req: Request, res: Response) => {
 
         const branch = await Branch.create({
             name, contact_number, email, address, is_active: true
-        }, {transaction: t});
+        }, { transaction: t });
 
 
         if (unavailable_dates && unavailable_dates.length > 0) {
@@ -908,7 +943,7 @@ export const createBranch = async (req: Request, res: Response) => {
                 date: item.date,
                 reason: item.reason || "Unavailable"
             }));
-            await BranchUnavailableDate.bulkCreate(dateRecords, {transaction: t});
+            await BranchUnavailableDate.bulkCreate(dateRecords, { transaction: t });
         }
 
         if (lines && lines.length > 0) {
@@ -919,7 +954,7 @@ export const createBranch = async (req: Request, res: Response) => {
                 advisor: line.advisor,
                 status: "ACTIVE"
             }));
-            await ServiceLine.bulkCreate(lineRecords, {transaction: t});
+            await ServiceLine.bulkCreate(lineRecords, { transaction: t });
         }
 
         if (custom_pricing && custom_pricing.length > 0) {
@@ -929,11 +964,11 @@ export const createBranch = async (req: Request, res: Response) => {
                 price: item.price,
                 is_available: true
             }));
-            await BranchService.bulkCreate(serviceRecords, {transaction: t});
+            await BranchService.bulkCreate(serviceRecords, { transaction: t });
         }
 
         await t.commit();
-        return res.status(201).json({message: "Branch fully configured successfully", branch});
+        return res.status(201).json({ message: "Branch fully configured successfully", branch });
     } catch (error: any) {
         await t.rollback();
         console.error("Create Branch Error:", error);
@@ -950,19 +985,19 @@ export const listBranches = async (req: Request, res: Response) => {
         const branches = await Branch.findAll();
         return res.status(http.OK).json(branches);
     } catch (error) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error fetching branches"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching branches" });
     }
 };
 
 export const getBranchDetails = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const branch = await Branch.findByPk(id, {
             include: [
                 {
                     model: Service,
                     as: "services",
-                    through: {attributes: ["price", "is_available"]}
+                    through: { attributes: ["price", "is_available"] }
                 },
                 {
                     model: ServiceLine,
@@ -975,20 +1010,20 @@ export const getBranchDetails = async (req: Request, res: Response) => {
             ]
         });
 
-        if (!branch) return res.status(http.NOT_FOUND).json({message: "Branch not found"});
+        if (!branch) return res.status(http.NOT_FOUND).json({ message: "Branch not found" });
         return res.status(http.OK).json(branch);
     } catch (error: any) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error fetching details", error: error.message});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching details", error: error.message });
     }
 };
 
 export const addServiceToBranch = async (req: Request, res: Response) => {
     try {
-        const {branchId} = req.params;
-        const {service_id, custom_price} = req.body;
+        const { branchId } = req.params;
+        const { service_id, custom_price } = req.body;
 
         const branch = await Branch.findByPk(branchId);
-        if (!branch) return res.status(http.NOT_FOUND).json({message: "Branch not found"});
+        if (!branch) return res.status(http.NOT_FOUND).json({ message: "Branch not found" });
 
 
         await BranchService.upsert({
@@ -998,17 +1033,17 @@ export const addServiceToBranch = async (req: Request, res: Response) => {
             is_available: true
         });
 
-        return res.status(http.OK).json({message: "Service added/updated for branch successfully"});
+        return res.status(http.OK).json({ message: "Service added/updated for branch successfully" });
     } catch (error: any) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error adding service", error: error.message});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error adding service", error: error.message });
     }
 };
 
 
 export const createServiceLine = async (req: Request, res: Response) => {
     try {
-        const {branchId} = req.params;
-        const {name, type, advisor} = req.body;
+        const { branchId } = req.params;
+        const { name, type, advisor } = req.body;
 
         const line = await ServiceLine.create({
             branch_id: Number(branchId),
@@ -1018,7 +1053,7 @@ export const createServiceLine = async (req: Request, res: Response) => {
             status: "ACTIVE"
         });
 
-        return res.status(http.CREATED).json({message: "Service Line created", line});
+        return res.status(http.CREATED).json({ message: "Service Line created", line });
     } catch (error: any) {
         return res.status(http.INTERNAL_SERVER_ERROR).json({
             message: "Error creating service line",
@@ -1069,27 +1104,27 @@ export const getBranchServiceLines = async (req: Request, res: Response) => {
 
 export const updateService = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
-        const {name, type, base_price} = req.body;
+        const { id } = req.params;
+        const { name, type, base_price } = req.body;
 
         const service = await Service.findByPk(id);
-        if (!service) return res.status(404).json({message: "Service not found"});
+        if (!service) return res.status(404).json({ message: "Service not found" });
 
-        await service.update({name, type, base_price});
-        return res.status(200).json({message: "Service updated", service});
+        await service.update({ name, type, base_price });
+        return res.status(200).json({ message: "Service updated", service });
     } catch (error: any) {
-        return res.status(500).json({message: "Error updating service", error: error.message});
+        return res.status(500).json({ message: "Error updating service", error: error.message });
     }
 };
 
 export const deleteService = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
-        const deleted = await Service.destroy({where: {id}});
-        if (!deleted) return res.status(404).json({message: "Service not found"});
-        return res.status(200).json({message: "Service deleted successfully"});
+        const { id } = req.params;
+        const deleted = await Service.destroy({ where: { id } });
+        if (!deleted) return res.status(404).json({ message: "Service not found" });
+        return res.status(200).json({ message: "Service deleted successfully" });
     } catch (error: any) {
-        return res.status(500).json({message: "Error deleting service", error: error.message});
+        return res.status(500).json({ message: "Error deleting service", error: error.message });
     }
 };
 
@@ -1099,33 +1134,33 @@ export const getAllPackages = async (req: Request, res: Response) => {
             include: [{
                 model: Service,
                 as: 'services',
-                through: {attributes: []}
+                through: { attributes: [] }
             }]
         });
         return res.status(200).json(packages);
     } catch (error: any) {
-        return res.status(500).json({message: "Error fetching packages", error: error.message});
+        return res.status(500).json({ message: "Error fetching packages", error: error.message });
     }
 };
 
 export const updatePackage = async (req: Request, res: Response) => {
     const t = await db.sequelize.transaction();
     try {
-        const {id} = req.params;
-        const {name, short_description, description, serviceIds} = req.body;
+        const { id } = req.params;
+        const { name, short_description, description, serviceIds } = req.body;
 
         const pkg = await Package.findByPk(id);
         if (!pkg) {
             await t.rollback();
-            return res.status(404).json({message: "Package not found"});
+            return res.status(404).json({ message: "Package not found" });
         }
 
         let totalPrice = pkg.total_price;
         if (serviceIds) {
-            const services = await Service.findAll({where: {id: serviceIds}});
+            const services = await Service.findAll({ where: { id: serviceIds } });
             if (!services.length) {
                 await t.rollback();
-                return res.status(400).json({message: "No valid services provided"});
+                return res.status(400).json({ message: "No valid services provided" });
             }
             totalPrice = services.reduce((sum: number, s: any) => sum + Number(s.base_price), 0);
         }
@@ -1135,32 +1170,32 @@ export const updatePackage = async (req: Request, res: Response) => {
             short_description,
             description,
             total_price: totalPrice
-        }, {transaction: t});
+        }, { transaction: t });
 
         if (serviceIds) {
-            await (pkg as any).setServices(serviceIds, {transaction: t});
+            await (pkg as any).setServices(serviceIds, { transaction: t });
         }
 
         await t.commit();
 
-        const updatedPkg = await Package.findByPk(id, {include: ['services']});
-        return res.status(200).json({message: "Package updated", package: updatedPkg});
+        const updatedPkg = await Package.findByPk(id, { include: ['services'] });
+        return res.status(200).json({ message: "Package updated", package: updatedPkg });
 
     } catch (error: any) {
         await t.rollback();
         console.error("Update Package Error:", error);
-        return res.status(500).json({message: "Error updating package", error: error.message});
+        return res.status(500).json({ message: "Error updating package", error: error.message });
     }
 };
 
 export const deletePackage = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
-        const deleted = await Package.destroy({where: {id}});
-        if (!deleted) return res.status(404).json({message: "Package not found"});
-        return res.status(200).json({message: "Package deleted successfully"});
+        const { id } = req.params;
+        const deleted = await Package.destroy({ where: { id } });
+        if (!deleted) return res.status(404).json({ message: "Package not found" });
+        return res.status(200).json({ message: "Package deleted successfully" });
     } catch (error: any) {
-        return res.status(500).json({message: "Error deleting package", error: error.message});
+        return res.status(500).json({ message: "Error deleting package", error: error.message });
     }
 };
 
@@ -1168,7 +1203,7 @@ export const deletePackage = async (req: Request, res: Response) => {
 export const updateBranch = async (req: Request, res: Response) => {
     const t = await db.sequelize.transaction();
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const {
             name, contact_number, address, email,
             unavailable_dates, lines, custom_pricing
@@ -1177,16 +1212,16 @@ export const updateBranch = async (req: Request, res: Response) => {
         const branch = await Branch.findByPk(id);
         if (!branch) {
             await t.rollback();
-            return res.status(404).json({message: "Branch not found"});
+            return res.status(404).json({ message: "Branch not found" });
         }
 
         await branch.update({
             name, contact_number, address, email
-        }, {transaction: t});
+        }, { transaction: t });
 
 
         if (unavailable_dates) {
-            await BranchUnavailableDate.destroy({where: {branch_id: id}, transaction: t});
+            await BranchUnavailableDate.destroy({ where: { branch_id: id }, transaction: t });
 
             if (unavailable_dates.length > 0) {
                 const dateRecords = unavailable_dates.map((item: { date: string, reason: string }) => ({
@@ -1194,12 +1229,12 @@ export const updateBranch = async (req: Request, res: Response) => {
                     date: item.date,
                     reason: item.reason || "Unavailable"
                 }));
-                await BranchUnavailableDate.bulkCreate(dateRecords, {transaction: t});
+                await BranchUnavailableDate.bulkCreate(dateRecords, { transaction: t });
             }
         }
 
         if (lines) {
-            await ServiceLine.destroy({where: {branch_id: id}, transaction: t});
+            await ServiceLine.destroy({ where: { branch_id: id }, transaction: t });
 
             if (lines.length > 0) {
                 const lineRecords = lines.map((line: any) => ({
@@ -1209,12 +1244,12 @@ export const updateBranch = async (req: Request, res: Response) => {
                     advisor: line.advisor,
                     status: "ACTIVE"
                 }));
-                await ServiceLine.bulkCreate(lineRecords, {transaction: t});
+                await ServiceLine.bulkCreate(lineRecords, { transaction: t });
             }
         }
 
         if (custom_pricing) {
-            await BranchService.destroy({where: {branch_id: id}, transaction: t});
+            await BranchService.destroy({ where: { branch_id: id }, transaction: t });
 
             if (custom_pricing.length > 0) {
                 const serviceRecords = custom_pricing.map((item: any) => ({
@@ -1223,48 +1258,48 @@ export const updateBranch = async (req: Request, res: Response) => {
                     price: item.price,
                     is_available: true
                 }));
-                await BranchService.bulkCreate(serviceRecords, {transaction: t});
+                await BranchService.bulkCreate(serviceRecords, { transaction: t });
             }
         }
 
         await t.commit();
-        return res.status(200).json({message: "Branch updated successfully", branch});
+        return res.status(200).json({ message: "Branch updated successfully", branch });
     } catch (error: any) {
         await t.rollback();
         console.error("Update Branch Error:", error);
-        return res.status(500).json({message: "Error updating branch", error: error.message});
+        return res.status(500).json({ message: "Error updating branch", error: error.message });
     }
 };
 
 export const deleteBranch = async (req: Request, res: Response) => {
     const t = await db.sequelize.transaction();
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const branch = await Branch.findByPk(id);
 
         if (!branch) {
             await t.rollback();
-            return res.status(404).json({message: "Branch not found"});
+            return res.status(404).json({ message: "Branch not found" });
         }
 
-        await BranchUnavailableDate.destroy({where: {branch_id: id}, transaction: t});
-        await BranchService.destroy({where: {branch_id: id}, transaction: t});
-        await ServiceLine.destroy({where: {branch_id: id}, transaction: t});
+        await BranchUnavailableDate.destroy({ where: { branch_id: id }, transaction: t });
+        await BranchService.destroy({ where: { branch_id: id }, transaction: t });
+        await ServiceLine.destroy({ where: { branch_id: id }, transaction: t });
 
-        await branch.destroy({transaction: t});
+        await branch.destroy({ transaction: t });
 
         await t.commit();
-        return res.status(200).json({message: "Branch deleted successfully"});
+        return res.status(200).json({ message: "Branch deleted successfully" });
     } catch (error: any) {
         await t.rollback();
-        return res.status(500).json({message: "Error deleting branch", error: error.message});
+        return res.status(500).json({ message: "Error deleting branch", error: error.message });
     }
 };
 
 
 export const getBranchCatalog = async (req: Request, res: Response) => {
     try {
-        const {branchId} = req.params;
+        const { branchId } = req.params;
 
         const branchServices = await Branch.findByPk(branchId, {
             include: [
@@ -1272,13 +1307,13 @@ export const getBranchCatalog = async (req: Request, res: Response) => {
                     model: Service,
                     as: "services",
                     attributes: ["id", "name", "type", "description", "base_price"],
-                    through: {attributes: ["price", "is_available"]}
+                    through: { attributes: ["price", "is_available"] }
                 }
             ]
         });
 
         if (!branchServices) {
-            return res.status(404).json({message: "Branch not found"});
+            return res.status(404).json({ message: "Branch not found" });
         }
 
         const packages = await Package.findAll({
@@ -1320,7 +1355,7 @@ export const getBranchCatalog = async (req: Request, res: Response) => {
 
     } catch (error: any) {
         console.error("Get Branch Catalog Error:", error);
-        return res.status(500).json({message: "Error fetching catalog", error: error.message});
+        return res.status(500).json({ message: "Error fetching catalog", error: error.message });
     }
 };
 
@@ -1366,8 +1401,8 @@ const MOCK_PROMOS = [
 
 export const validatePromoCode = async (req: Request, res: Response) => {
     try {
-        const {code} = req.body;
-        if (!code) return res.status(http.BAD_REQUEST).json({isValid: false, message: "Required"});
+        const { code } = req.body;
+        if (!code) return res.status(http.BAD_REQUEST).json({ isValid: false, message: "Required" });
 
         const normalizedCode = code.toUpperCase().trim();
 
@@ -1390,7 +1425,7 @@ export const validatePromoCode = async (req: Request, res: Response) => {
         });
 
     } catch (error: any) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error", error: error.message});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error", error: error.message });
     }
 };
 
@@ -1399,7 +1434,7 @@ export const getAvailablePromos = async (req: Request, res: Response) => {
     try {
         return res.status(http.OK).json(MOCK_PROMOS);
     } catch (error: any) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error fetching promos"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching promos" });
     }
 };
 
@@ -1413,7 +1448,7 @@ export const getMonthlyAvailability = async (req: Request, res: Response) => {
         const month = req.query.month as string;
 
         if (!branchId || !serviceLineId || !month) {
-            return res.status(http.BAD_REQUEST).json({message: "Missing params"});
+            return res.status(http.BAD_REQUEST).json({ message: "Missing params" });
         }
 
         const startOfMonth = dayjs(month as string).startOf('month').format('YYYY-MM-DD');
@@ -1422,7 +1457,7 @@ export const getMonthlyAvailability = async (req: Request, res: Response) => {
         const unavailable = await BranchUnavailableDate.findAll({
             where: {
                 branch_id: Number(branchId),
-                date: {[Op.between]: [startOfMonth, endOfMonth]}
+                date: { [Op.between]: [startOfMonth, endOfMonth] }
             },
             attributes: ['date', 'reason']
         });
@@ -1431,8 +1466,8 @@ export const getMonthlyAvailability = async (req: Request, res: Response) => {
             where: {
                 branch_id: branchId,
                 service_line_id: serviceLineId,
-                booking_date: {[Op.between]: [startOfMonth, endOfMonth]},
-                status: {[Op.ne]: 'CANCELLED'}
+                booking_date: { [Op.between]: [startOfMonth, endOfMonth] },
+                status: { [Op.ne]: 'CANCELLED' }
             },
             attributes: ['booking_date', [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'count']],
             group: ['booking_date']
@@ -1459,7 +1494,7 @@ export const getMonthlyAvailability = async (req: Request, res: Response) => {
         });
 
     } catch (error: any) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({error: error.message});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ error: error.message });
     }
 };
 
@@ -1470,7 +1505,7 @@ export const getDailySlots = async (req: Request, res: Response) => {
         const date = req.query.date as string;
 
         if (!branchId || !serviceLineId || !date) {
-            return res.status(http.BAD_REQUEST).json({message: "Missing params"});
+            return res.status(http.BAD_REQUEST).json({ message: "Missing params" });
         }
 
         const bookings = await ServiceParkBooking.findAll({
@@ -1478,13 +1513,13 @@ export const getDailySlots = async (req: Request, res: Response) => {
                 branch_id: branchId,
                 service_line_id: serviceLineId,
                 booking_date: date,
-                status: {[Op.ne]: 'CANCELLED'}
+                status: { [Op.ne]: 'CANCELLED' }
             }
         });
 
         return res.status(http.OK).json(bookings);
     } catch (error: any) {
-        return res.status(http.INTERNAL_SERVER_ERROR).json({error: error.message});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ error: error.message });
     }
 };
 
@@ -1506,7 +1541,7 @@ export const createBooking = async (req: Request, res: Response) => {
 
         if (!finalCustomerId && contact_no) {
             let customer = await Customer.findOne({
-                where: {phone_number: contact_no},
+                where: { phone_number: contact_no },
                 transaction: t
             });
 
@@ -1520,7 +1555,7 @@ export const createBooking = async (req: Request, res: Response) => {
                     // address: address || null,
                     city: address,
                     lead_source: "Service Park Booking"
-                }, {transaction: t});
+                }, { transaction: t });
 
 
                 // if (vehicle_no) {
@@ -1540,7 +1575,7 @@ export const createBooking = async (req: Request, res: Response) => {
 
         if (!finalCustomerId) {
             await t.rollback();
-            return res.status(400).json({message: "Customer details (ID or Phone/Name) are required."});
+            return res.status(400).json({ message: "Customer details (ID or Phone/Name) are required." });
         }
 
 
@@ -1550,15 +1585,15 @@ export const createBooking = async (req: Request, res: Response) => {
                 branch_id: branchIdNum,
                 service_line_id: lineIdNum,
                 booking_date,
-                start_time: {[Op.in]: times},
-                status: {[Op.ne]: 'CANCELLED'}
+                start_time: { [Op.in]: times },
+                status: { [Op.ne]: 'CANCELLED' }
             },
             transaction: t
         });
 
         if (existing.length > 0) {
             await t.rollback();
-            return res.status(http.CONFLICT).json({message: "Some slots were just booked by another user."});
+            return res.status(http.CONFLICT).json({ message: "Some slots were just booked by another user." });
         }
 
         const bookingRecords = slots.map((slot: any) => ({
@@ -1574,7 +1609,7 @@ export const createBooking = async (req: Request, res: Response) => {
 
         console.log("Final Customer Id used for booking:", finalCustomerId);
 
-        await ServiceParkBooking.bulkCreate(bookingRecords, {transaction: t});
+        await ServiceParkBooking.bulkCreate(bookingRecords, { transaction: t });
 
         await t.commit();
 
@@ -1584,13 +1619,13 @@ export const createBooking = async (req: Request, res: Response) => {
             actionType: "CREATE",
             entityId: 0,
             description: `New Booking created for ${booking_date} (${slots.length} slots)`,
-            changes: {branch_id, date: booking_date, slots}
+            changes: { branch_id, date: booking_date, slots }
         });
 
-        return res.status(http.CREATED).json({message: "Booking confirmed"});
+        return res.status(http.CREATED).json({ message: "Booking confirmed" });
 
     } catch (error: any) {
         await t.rollback();
-        return res.status(http.INTERNAL_SERVER_ERROR).json({error: error.message});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ error: error.message });
     }
 };

@@ -1,10 +1,10 @@
 import db from "../models";
 
-const {ActivityLog, User} = db;
+const { ActivityLog, User } = db;
 
 interface LogData {
     userId: number;
-    module: "VEHICLE" | "SPARE_PARTS" | "FAST_TRACK" | "SERVICE_PARK" | "USER_MGMT";
+    module: "VEHICLE" | "SPARE_PARTS" | "FAST_TRACK" | "SERVICE_PARK" | "USER_MGMT" | "BYD_SALES";
     actionType: "CREATE" | "UPDATE" | "DELETE" | "ASSIGN" | "STATUS_CHANGE";
     entityId: number;
     description: string;
