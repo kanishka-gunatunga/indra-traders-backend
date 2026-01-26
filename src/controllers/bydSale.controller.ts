@@ -765,10 +765,27 @@ export const createBydUnavailableSale = async (req: Request, res: Response) => {
     }
 };
 
-export const getAllBydUnavailableSales = async (_req: Request, res: Response) => {
+export const getAllBydUnavailableSales = async (req: Request, res: Response) => {
     try {
-        const data = await BydUnavailableSale.findAll({ order: [["createdAt", "DESC"]] });
-        res.status(http.OK).json(data);
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 10;
+        const offset = (page - 1) * limit;
+
+        const { count, rows } = await BydUnavailableSale.findAndCountAll({
+            order: [["createdAt", "DESC"]],
+            limit,
+            offset
+        });
+
+        res.status(http.OK).json({
+            data: rows,
+            meta: {
+                total: count,
+                page,
+                limit,
+                totalPages: Math.ceil(count / limit)
+            }
+        });
     } catch (error) {
         console.error("Error fetching unavailable BYD sales:", error);
         res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });

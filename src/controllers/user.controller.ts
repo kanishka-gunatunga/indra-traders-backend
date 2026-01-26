@@ -1,10 +1,10 @@
-import {Request, Response} from "express";
+import { Request, Response } from "express";
 import bcrypt from 'bcryptjs'
-import jwt, {Secret} from "jsonwebtoken";
+import jwt, { Secret } from "jsonwebtoken";
 import http from 'http-status-codes';
 import dotenv from "dotenv";
 import db from "../models";
-import {Op} from "sequelize";
+import { Op } from "sequelize";
 
 dotenv.config();
 
@@ -40,11 +40,11 @@ export const generateToken = (user: JwtUserPayload) => {
     }
 
     return jwt.sign({
-            id: user.id,
-            role: user.role,
-        },
+        id: user.id,
+        role: user.role,
+    },
         secret,
-        {expiresIn: "1d"}
+        { expiresIn: "1d" }
     );
 };
 
@@ -100,12 +100,12 @@ export const createUser = async (req: Request, res: Response) => {
         } = req.body;
 
         if (password !== confirm_password) {
-            return res.status(http.BAD_REQUEST).json({message: "Passwords do not match"});
+            return res.status(http.BAD_REQUEST).json({ message: "Passwords do not match" });
         }
 
-        const existingUser = await User.findOne({where: {email}});
+        const existingUser = await User.findOne({ where: { email } });
         if (existingUser) {
-            return res.status(http.BAD_REQUEST).json({message: "Email already exists"});
+            return res.status(http.BAD_REQUEST).json({ message: "Email already exists" });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -123,7 +123,7 @@ export const createUser = async (req: Request, res: Response) => {
             languages: userLanguages,
         });
 
-        res.status(http.CREATED).json({message: "User created successfully", user});
+        res.status(http.CREATED).json({ message: "User created successfully", user });
     } catch (error: any) {
         console.error("Update User Error:", error);
         res.status(http.INTERNAL_SERVER_ERROR).json({
@@ -136,41 +136,41 @@ export const createUser = async (req: Request, res: Response) => {
 
 export const login = async (req: Request, res: Response) => {
     try {
-        const {email, password} = req.body;
-        const user = await User.findOne({where: {email}});
+        const { email, password } = req.body;
+        const user = await User.findOne({ where: { email } });
 
         if (!user) {
-            return res.status(http.UNAUTHORIZED).json({message: "User not found"});
+            return res.status(http.UNAUTHORIZED).json({ message: "User not found" });
         }
 
         const passwordMatch = await bcrypt.compare(password, user.password);
         if (!passwordMatch) {
-            return res.status(http.UNAUTHORIZED).json({message: "Invalid password"});
+            return res.status(http.UNAUTHORIZED).json({ message: "Invalid password" });
         }
 
         const token = generateToken({
             id: user.id,
             role: user.user_role,
         });
-        res.json({user, accessToken: token});
+        res.json({ user, accessToken: token });
     } catch (err) {
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error logging user", err});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error logging user", err });
     }
 };
 
 export const getUsers = async (req: Request, res: Response) => {
     try {
-        const {user_role, department, branch} = req.query;
+        const { user_role, department, branch } = req.query;
 
         const where: any = {};
         if (user_role) where.user_role = user_role;
         if (department) where.department = department;
         if (branch) where.branch = branch;
 
-        const users = await User.findAll({where});
+        const users = await User.findAll({ where });
         res.json(users);
     } catch (error) {
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error fetching users", error});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching users", error });
     }
 };
 
@@ -178,10 +178,10 @@ export const getUsers = async (req: Request, res: Response) => {
 export const getUserById = async (req: Request, res: Response) => {
     try {
         const user = await User.findByPk(req.params.id);
-        if (!user) return res.status(http.NOT_FOUND).json({message: "User not found"});
+        if (!user) return res.status(http.NOT_FOUND).json({ message: "User not found" });
         res.json(user);
     } catch (error) {
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error fetching user", error});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching user", error });
     }
 };
 
@@ -201,10 +201,10 @@ export const getUserById = async (req: Request, res: Response) => {
 
 export const checkUserHandoverRequirements = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const user = await User.findByPk(id);
 
-        if (!user) return res.status(http.NOT_FOUND).json({message: "User not found"});
+        if (!user) return res.status(http.NOT_FOUND).json({ message: "User not found" });
 
         // If user is not sales/call agent, usually no leads to check, but let's be safe based on department
         const config = getDepartmentConfig(user.department);
@@ -227,7 +227,7 @@ export const checkUserHandoverRequirements = async (req: Request, res: Response)
                 branch: user.branch,
                 department: user.department,
                 user_role: user.user_role,
-                id: {[Op.ne]: user.id}
+                id: { [Op.ne]: user.id }
             },
             attributes: ['id', 'full_name', 'email']
         });
@@ -240,7 +240,7 @@ export const checkUserHandoverRequirements = async (req: Request, res: Response)
 
     } catch (error: any) {
         console.error("Check Handover Error:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error checking requirements", error: error.message});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error checking requirements", error: error.message });
     }
 };
 
@@ -249,11 +249,11 @@ export const updateUser = async (req: Request, res: Response) => {
     const t = await db.sequelize.transaction();
 
     try {
-        const {id} = req.params;
-        const {transferToUserId, ...updateData} = req.body;
+        const { id } = req.params;
+        const { transferToUserId, ...updateData } = req.body;
 
         const user = await User.findByPk(id);
-        if (!user) return res.status(http.NOT_FOUND).json({message: "User not found"});
+        if (!user) return res.status(http.NOT_FOUND).json({ message: "User not found" });
 
         const isRoleChange = updateData.user_role && updateData.user_role !== user.user_role;
         const isDeptChange = updateData.department && updateData.department !== user.department;
@@ -280,11 +280,11 @@ export const updateUser = async (req: Request, res: Response) => {
                 const replacementUser = await User.findByPk(transferToUserId);
                 if (!replacementUser) {
                     await t.rollback();
-                    return res.status(http.BAD_REQUEST).json({message: "Replacement user not found"});
+                    return res.status(http.BAD_REQUEST).json({ message: "Replacement user not found" });
                 }
 
                 await (config.model as any).update(
-                    {[config.fk]: transferToUserId},
+                    { [config.fk]: transferToUserId },
                     {
                         where: {
                             [config.fk]: user.id,
@@ -308,7 +308,7 @@ export const updateUser = async (req: Request, res: Response) => {
 
 
                 if (historyRecords.length > 0) {
-                    await (config.historyModel as any).bulkCreate(historyRecords, {transaction: t});
+                    await (config.historyModel as any).bulkCreate(historyRecords, { transaction: t });
                 }
 
 
@@ -319,30 +319,71 @@ export const updateUser = async (req: Request, res: Response) => {
             updateData.password = await bcrypt.hash(updateData.password, 10);
         }
 
-        await user.update(updateData, {transaction: t});
+        await user.update(updateData, { transaction: t });
 
         await t.commit();
-        res.json({message: "User updated and leads transferred successfully", user});
+        res.json({ message: "User updated and leads transferred successfully", user });
     } catch (error) {
         await t.rollback();
         console.error("Error updating user:", error);
 
         const errorMessage = (error as any).message || "Unknown error";
 
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error updating user", error: errorMessage});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error updating user", error: errorMessage });
     }
 };
 
 
 export const deleteUser = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const user = await User.findByPk(id);
-        if (!user) return res.status(http.NOT_FOUND).json({message: "User not found"});
+        if (!user) return res.status(http.NOT_FOUND).json({ message: "User not found" });
 
         await user.destroy();
-        res.json({message: "User deleted successfully"});
+        res.json({ message: "User deleted successfully" });
     } catch (error) {
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error deleting user", error});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error deleting user", error });
+    }
+};
+// Profile Management
+export const getProfile = async (req: Request, res: Response) => {
+    try {
+        const userId = (req as AuthenticatedRequest).user?.id;
+        if (!userId) return res.status(http.UNAUTHORIZED).json({ message: "Unauthorized" });
+
+        const user = await User.findByPk(userId);
+        if (!user) return res.status(http.NOT_FOUND).json({ message: "User not found" });
+
+        res.json(user);
+    } catch (error) {
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching profile", error });
+    }
+};
+
+export const updateProfile = async (req: Request, res: Response) => {
+    try {
+        const userId = (req as AuthenticatedRequest).user?.id;
+        if (!userId) return res.status(http.UNAUTHORIZED).json({ message: "Unauthorized" });
+
+        const { full_name, password, confirm_password } = req.body;
+
+        const user = await User.findByPk(userId);
+        if (!user) return res.status(http.NOT_FOUND).json({ message: "User not found" });
+
+        const updateData: any = {};
+        if (full_name) updateData.full_name = full_name;
+
+        if (password) {
+            if (password !== confirm_password) {
+                return res.status(http.BAD_REQUEST).json({ message: "Passwords do not match" });
+            }
+            updateData.password = await bcrypt.hash(password, 10);
+        }
+
+        await user.update(updateData);
+        res.json({ message: "Profile updated successfully", user });
+    } catch (error) {
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error updating profile", error });
     }
 };

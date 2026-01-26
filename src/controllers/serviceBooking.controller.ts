@@ -25,6 +25,9 @@ export const getScheduledServices = async (req: Request, res: Response) => {
   try {
     const branchId = req.query.branchId ? Number(req.query.branchId) : null;
     const date = req.query.date as string;
+    const page = req.query.page ? Number(req.query.page) : 1;
+    const limit = req.query.limit ? Number(req.query.limit) : 10;
+    const offset = (page - 1) * limit;
 
     const whereClause: any = {
       status: { [Op.ne]: "CANCELLED" }
@@ -45,7 +48,7 @@ export const getScheduledServices = async (req: Request, res: Response) => {
     }
 
     // Query bookings with joins
-    const bookings = await ServiceParkBooking.findAll({
+    const { count, rows: bookings } = await ServiceParkBooking.findAndCountAll({
       where: whereClause,
       include: [
         {
@@ -71,10 +74,13 @@ export const getScheduledServices = async (req: Request, res: Response) => {
         }
       ],
       order: [["booking_date", "ASC"], ["start_time", "ASC"]],
+      limit,
+      offset,
+      distinct: true
     });
 
 
-    const response = bookings.map((booking) => {
+    const formattedBookings = bookings.map((booking) => {
 
       const serviceLine = (booking as any).ServiceLine;
       const customer = (booking as any).Customer;
@@ -99,7 +105,15 @@ export const getScheduledServices = async (req: Request, res: Response) => {
       };
     });
 
-    return res.status(http.OK).json(response);
+    return res.status(http.OK).json({
+      data: formattedBookings,
+      meta: {
+        totalItems: count,
+        totalPages: Math.ceil(count / limit),
+        currentPage: page,
+        itemsPerPage: limit
+      }
+    });
   } catch (error: any) {
     console.error("Get Scheduled Services Error: ", error);
     return res.status(http.INTERNAL_SERVER_ERROR).json({

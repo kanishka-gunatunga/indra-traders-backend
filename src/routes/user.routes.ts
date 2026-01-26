@@ -1,10 +1,10 @@
-import {Router} from "express";
+import { Router } from "express";
 import {
     createUser,
     getUsers,
     getUserById,
     updateUser,
-    deleteUser, login, checkUserHandoverRequirements,
+    deleteUser, login, checkUserHandoverRequirements, getProfile, updateProfile,
 } from "../controllers/user.controller";
 
 const router = Router();
@@ -12,6 +12,10 @@ const router = Router();
 router.post("/login", login);
 router.post("/", createUser);
 router.get("/", getUsers);
+
+router.get("/profile", getProfile);
+router.put("/profile", updateProfile);
+
 router.get("/:id", getUserById);
 
 router.get("/:id/handover-check", checkUserHandoverRequirements);
