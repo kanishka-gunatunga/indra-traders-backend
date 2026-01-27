@@ -105,7 +105,7 @@ export const getBookingById = async (req: Request, res: Response) => {
     try {
         const id = req.params.id ? Number(req.params.id) : NaN;
 
-        if(!req.params.id || isNaN(id) || id < 1) {
+        if (!req.params.id || isNaN(id) || id < 1) {
             return res.status(http.BAD_REQUEST).json({
                 message: "Valid booking id is required",
             });
@@ -113,12 +113,12 @@ export const getBookingById = async (req: Request, res: Response) => {
 
         const booking = await ServiceParkBooking.findByPk(id, {
             include: [
-                {model: Customer, attributes: ["id", "customer_name", "phone_number"]},
-                {model: ServiceLine, attributes: ["id", "name", "type"]},
+                { model: Customer, attributes: ["id", "customer_name", "phone_number"] },
+                { model: ServiceLine, attributes: ["id", "name", "type"] },
             ],
         });
 
-        if(!booking) {
+        if (!booking) {
             return res.status(http.NOT_FOUND).json({
                 message: "Booking not found",
             });
@@ -302,6 +302,82 @@ export const updateBooking = async (req: Request, res: Response) => {
         console.error("updateBooking error:", error);
         return res.status(http.INTERNAL_SERVER_ERROR).json({
             message: "Error updating booking",
+            error: error.message,
+        });
+    }
+};
+
+export const getCalendarDots = async (req: Request, res: Response) => {
+    try {
+        const branchId = req.query.branchId ? Number(req.query.branchId) : undefined;
+        const startDate = req.query.startDate as string | undefined;
+        const endDate = req.query.endDate as string | undefined;
+        const lineId = req.query.lineId ? Number(req.query.lineId) : undefined;
+        const serviceType = (req.query.serviceType as string) || undefined;
+
+        if (!branchId || isNaN(branchId) || branchId < 1) {
+            return res.status(http.BAD_REQUEST).json({
+                message: "branchId is required and must be a positive number",
+            });
+        }
+
+        if (startDate && !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+            return res.status(http.BAD_REQUEST).json({
+                message: "startDate must be YYYY-MM-DD",
+            });
+        }
+        if (endDate && !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+            return res.status(http.BAD_REQUEST).json({
+                message: "endDate must be YYYY-MM-DD",
+            });
+        }
+
+        const where: Record<string, unknown> = {
+            branch_id: branchId,
+        };
+
+        if (startDate && endDate) {
+            where.booking_date = { [Op.between]: [startDate, endDate] };
+        } else if (startDate) {
+            where.booking_date = { [Op.gte]: startDate };
+        } else if (endDate) {
+            where.booking_date = { [Op.lte]: endDate };
+        }
+
+        if (lineId != null && !isNaN(lineId)) {
+            where.service_line_id = lineId;
+        }
+
+        const queryOptions: any = {
+            where,
+            attributes: ["booking_date", "status"],
+            raw: true,
+            order: [["booking_date", "ASC"]],
+        };
+
+        if (serviceType) {
+            queryOptions.include = [
+                {
+                    model: ServiceLine,
+                    attributes: [],
+                    where: { type: serviceType },
+                    required: true,
+                },
+            ];
+        }
+
+        const bookings = await ServiceParkBooking.findAll(queryOptions);
+
+        const dots = (bookings as { booking_date: string; status: string }[]).map((b) => ({
+            date: b.booking_date,
+            status: b.status,
+        }));
+
+        return res.status(http.OK).json(dots);
+    } catch (error: any) {
+        console.error("getCalendarDots error:", error);
+        return res.status(http.INTERNAL_SERVER_ERROR).json({
+            message: "Error fetching calendar dots",
             error: error.message,
         });
     }
