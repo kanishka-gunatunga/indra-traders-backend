@@ -145,6 +145,15 @@ export const login = async (req: Request, res: Response) => {
             return res.status(http.UNAUTHORIZED).json({message: "User not found"});
         }
 
+        // Debug: Log user_role from database
+        console.log('[Login Debug] User found:', {
+            id: user.id,
+            email: user.email,
+            user_role: user.user_role,
+            user_role_raw: user.getDataValue('user_role'),
+            branch: user.branch
+        });
+
         const passwordMatch = await bcrypt.compare(password, user.password);
         if (!passwordMatch) {
             return res.status(http.UNAUTHORIZED).json({message: "Invalid password"});
@@ -191,6 +200,9 @@ export const login = async (req: Request, res: Response) => {
         if (branchId !== null) {
             response.branch_id = branchId;
         }
+
+        // Debug: Log final response
+        console.log('[Login Debug] Response user_role:', response.user.user_role);
 
         res.json(response);
     } catch (err) {
