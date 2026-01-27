@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import db from "../models";
 import http from "http-status-codes";
+import { Op } from "sequelize";
 
 const { UnavailableVehicleSale, UnavailableSparePart, UnavailableService } = db;
 
@@ -57,7 +58,22 @@ export const getAllUnavailableVehicleSales = async (req: Request, res: Response)
         const limit = parseInt(req.query.limit as string) || 10;
         const offset = (page - 1) * limit;
 
+        const { make, model, year } = req.query;
+
+        const whereClause: any = {};
+
+        if (make) {
+            whereClause.vehicle_make = { [Op.like]: `%${make}%` };
+        }
+        if (model) {
+            whereClause.vehicle_model = { [Op.like]: `%${model}%` };
+        }
+        if (year) {
+            whereClause.manufacture_year = year;
+        }
+
         const { count, rows } = await UnavailableVehicleSale.findAndCountAll({
+            where: whereClause,
             order: [["createdAt", "DESC"]],
             limit,
             offset
@@ -126,7 +142,22 @@ export const getAllUnavailableServices = async (req: Request, res: Response) => 
         const limit = parseInt(req.query.limit as string) || 10;
         const offset = (page - 1) * limit;
 
+        const { search, unavailable_repair, unavailable_paint } = req.query;
+
+        const whereClause: any = {};
+
+        if (search) {
+            whereClause.note = { [Op.like]: `%${search}%` };
+        }
+        if (unavailable_repair) {
+            whereClause.unavailable_repair = { [Op.like]: `%${unavailable_repair}%` };
+        }
+        if (unavailable_paint) {
+            whereClause.unavailable_paint = { [Op.like]: `%${unavailable_paint}%` };
+        }
+
         const { count, rows } = await UnavailableService.findAndCountAll({
+            where: whereClause,
             order: [["createdAt", "DESC"]],
             limit,
             offset
@@ -194,7 +225,22 @@ export const getAllUnavailableSpareParts = async (req: Request, res: Response) =
         const limit = parseInt(req.query.limit as string) || 10;
         const offset = (page - 1) * limit;
 
+        const { make, model, part_no } = req.query;
+
+        const whereClause: any = {};
+
+        if (make) {
+            whereClause.vehicle_make = { [Op.like]: `%${make}%` };
+        }
+        if (model) {
+            whereClause.vehicle_model = { [Op.like]: `%${model}%` };
+        }
+        if (part_no) {
+            whereClause.part_no = { [Op.like]: `%${part_no}%` };
+        }
+
         const { count, rows } = await UnavailableSparePart.findAndCountAll({
+            where: whereClause,
             order: [["createdAt", "DESC"]],
             limit,
             offset

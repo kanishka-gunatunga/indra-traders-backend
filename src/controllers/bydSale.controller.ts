@@ -771,7 +771,22 @@ export const getAllBydUnavailableSales = async (req: Request, res: Response) => 
         const limit = parseInt(req.query.limit as string) || 10;
         const offset = (page - 1) * limit;
 
+        const { model, year, color } = req.query;
+
+        const whereClause: any = {};
+
+        if (model) {
+            whereClause.vehicle_model = { [Op.like]: `%${model}%` };
+        }
+        if (year) {
+            whereClause.manufacture_year = year;
+        }
+        if (color) {
+            whereClause.color = { [Op.like]: `%${color}%` };
+        }
+
         const { count, rows } = await BydUnavailableSale.findAndCountAll({
+            where: whereClause,
             order: [["createdAt", "DESC"]],
             limit,
             offset

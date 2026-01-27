@@ -6,6 +6,7 @@ import {
     updateUser,
     deleteUser, login, checkUserHandoverRequirements, getProfile, updateProfile,
 } from "../controllers/user.controller";
+import { verifyToken } from "../middleware/auth";
 
 const router = Router();
 
@@ -13,8 +14,8 @@ router.post("/login", login);
 router.post("/", createUser);
 router.get("/", getUsers);
 
-router.get("/profile", getProfile);
-router.put("/profile", updateProfile);
+router.get("/profile", verifyToken, getProfile);
+router.put("/profile", verifyToken, updateProfile);
 
 router.get("/:id", getUserById);
 

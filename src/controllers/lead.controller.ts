@@ -35,45 +35,139 @@ interface Lead {
 
 export const getAllLeads = async (req: Request, res: Response) => {
     try {
+        const { page = 1, limit = 10, search, status, priority, startDate, endDate, department } = req.query;
+
+        const limitNum = Number(limit);
+        const pageNum = Number(page);
+        const offset = (pageNum - 1) * limitNum;
+
+        // --- Build Filter Conditions ---
+        const whereClause: any = {};
+        const customerWhereClause: any = {};
+
+        // 1. Status
+        if (status && status !== "All Status") {
+            // Check if status needs mapping (Frontend: 'New', DB: 'NEW' or 'New'?)
+            // DB seems to use uppercase usually, based on other controllers.
+            // Let's assume input matches DB or we try case-insensitive if possible, 
+            // but for now let's uppercase it as common standard if not sure, 
+            // OR matched to what we saw in other files.
+            // In existing getAllLeads, it did `(sale.status || "NEW").charAt(0).toUpperCase()..` for display.
+            // Let's force exact match if passed, or uppercase safe bet.
+            whereClause.status = status.toString().toUpperCase();
+        }
+
+        // 2. Priority
+        if (priority && priority !== "All Priority") {
+            // Frontend sends "P0", "P1". DB typically stores number 0, 1?
+            // "P0" -> 0.
+            if (priority.toString().startsWith("P")) {
+                const pNum = parseInt(priority.toString().replace("P", ""), 10);
+                if (!isNaN(pNum)) {
+                    whereClause.priority = pNum;
+                }
+            } else {
+                whereClause.priority = priority;
+            }
+        }
+
+        // 3. Date Range
+        if (startDate || endDate) {
+            const dateFilter: any = {};
+            if (startDate) dateFilter[Op.gte] = new Date(startDate as string);
+            if (endDate) {
+                const end = new Date(endDate as string);
+                end.setHours(23, 59, 59, 999);
+                dateFilter[Op.lte] = end;
+            }
+            whereClause.date = dateFilter;
+            // Note: If 'date' field is just a string in some tables, this might fail. 
+            // Assuming 'date' or 'createdAt' is DATE type. 
+            // Most sales tables usually have a 'date' field.
+        }
+
+        // 4. Search (Ticket No, Customer Name, Phone)
+        // This requires OR logic across main table and joining table.
+        // Sequelize support for "$associated.field$" in where.
+        if (search) {
+            whereClause[Op.or] = [
+                { ticket_number: { [Op.like]: `%${search}%` } },
+                { '$customer.customer_name$': { [Op.like]: `%${search}%` } },
+                { '$customer.phone_number$': { [Op.like]: `%${search}%` } }
+            ];
+        }
+
+        // --- Select Models based on Department ---
+        // ITPL -> VehicleSale
+        // ISP -> ServiceParkSale
+        // IMS -> SparePartSale
+        // IFT -> FastTrackSale
+        // BYD -> BydSale
+
+        let modelsToQuery: Array<{ model: any, type: Lead['type'], name: string }> = [];
+
+        if (department) {
+            switch (department) {
+                case 'ITPL': modelsToQuery.push({ model: VehicleSale, type: 'VEHICLE', name: "VehicleSale" }); break;
+                case 'ISP': modelsToQuery.push({ model: ServiceParkSale, type: 'SERVICE_PARK', name: "ServiceParkSale" }); break;
+                case 'IMS': modelsToQuery.push({ model: SparePartSale, type: 'SPARE_PART', name: "SparePartSale" }); break;
+                case 'IFT': modelsToQuery.push({ model: FastTrackSale, type: 'FAST_TRACK', name: "FastTrackSale" }); break;
+                case 'BYD': modelsToQuery.push({ model: BydSale, type: 'BYD', name: "BydSale" }); break;
+            }
+        } else {
+            // All
+            modelsToQuery = [
+                { model: VehicleSale, type: 'VEHICLE', name: "VehicleSale" },
+                { model: ServiceParkSale, type: 'SERVICE_PARK', name: "ServiceParkSale" },
+                { model: SparePartSale, type: 'SPARE_PART', name: "SparePartSale" },
+                { model: FastTrackSale, type: 'FAST_TRACK', name: "FastTrackSale" },
+                { model: BydSale, type: 'BYD', name: "BydSale" }
+            ];
+        }
+
         const commonInclude = [
-            { model: Customer, as: "customer" },
+            { model: Customer, as: "customer" }, // Required for search
             { model: User, as: "salesUser" },
             { model: User, as: "callAgent" },
         ];
 
+        // ServicePark might have different include (no callAgent maybe?)
         const serviceParkInclude = [
             { model: Customer, as: "customer" },
             { model: User, as: "salesUser" },
         ];
 
-        const safeFindAll = async (model: any, options: any, name: string) => {
+        const fetchPromises = modelsToQuery.map(async ({ model, type, name }) => {
             try {
-                return await model.findAll(options);
-            } catch (err: any) {
-                console.error(`Error fetching ${name}:`, err.message);
+                const includes = (type === 'SERVICE_PARK') ? serviceParkInclude : commonInclude;
+
+                // We must handle 'customer' required: false/true depending on search?
+                // If search is filtering by customer, we usually need required: true, 
+                // but since we did '$customer.name$' in top-level WHERE, Sequelize automatically handles join if we include 'customer'.
+                // BUT, 'all-leads' tables might not ALL behave identically. 
+                // Let's trust Sequelize's alias handling.
+
+                const results = await model.findAll({
+                    where: whereClause,
+                    include: includes,
+                    order: [["createdAt", "DESC"]] // Fetch latest first
+                });
+                return results.map((r: any) => ({ data: r, type }));
+            } catch (err) {
+                console.error(`Error querying ${name}:`, err);
                 return [];
             }
-        };
+        });
 
-        const [vehicleSales, fastTrackSales, sparePartSales, serviceParkSales, bydSales] = await Promise.all([
-            safeFindAll(VehicleSale, { include: commonInclude, order: [["createdAt", "DESC"]] }, "VehicleSale"),
-            safeFindAll(FastTrackSale, { include: commonInclude, order: [["createdAt", "DESC"]] }, "FastTrackSale"),
-            safeFindAll(SparePartSale, { include: commonInclude, order: [["createdAt", "DESC"]] }, "SparePartSale"),
-            safeFindAll(ServiceParkSale, { include: serviceParkInclude, order: [["createdAt", "DESC"]] }, "ServiceParkSale"),
-            safeFindAll(BydSale, { include: commonInclude, order: [["createdAt", "DESC"]] }, "BydSale")
-        ]);
+        const nestedResults = await Promise.all(fetchPromises);
+        const flatResults = nestedResults.flat();
 
-        const formatLead = (sale: any, type: Lead['type']): Lead => {
-            // Handle case where customer might be an object (if joined) or just an ID string (if data integrity issue)
-            // Based on include, it should be an object in 'customer' field.
-            // However, types in existing models say customer_id is string.
-            // If joined, sale.customer will be populated.
-
+        // --- Formatting ---
+        const formatLead = (row: any): Lead => {
+            const sale = row.data;
+            const type = row.type;
             const customerName = sale.customer?.customer_name || sale.customer_id || "Unknown Customer";
             const customerPhone = sale.customer?.phone_number || "";
-
-            // Map status directly
-            // Note: Use simple status mapping or capitalize
             const status = (sale.status || "NEW").charAt(0).toUpperCase() + (sale.status || "NEW").slice(1).toLowerCase();
 
             return {
@@ -89,23 +183,26 @@ export const getAllLeads = async (req: Request, res: Response) => {
             };
         };
 
-        const allLeads: Lead[] = [
-            ...vehicleSales.map((s: any) => formatLead(s, 'VEHICLE')),
-            ...fastTrackSales.map((s: any) => formatLead(s, 'FAST_TRACK')),
-            ...sparePartSales.map((s: any) => formatLead(s, 'SPARE_PART')),
-            ...serviceParkSales.map((s: any) => formatLead(s, 'SERVICE_PARK')),
-            ...bydSales.map((s: any) => formatLead(s, 'BYD')),
-        ];
+        const allLeads = flatResults.map(formatLead);
 
-        // Sort combined list by date desc if needed, assuming they want latest first
-        // Since we date format is string above, we might want to keep robust sorting.
-        // But for Kanban, maybe they are sorted by status? 
-        // The requirement just said "get all leads". 
-        // Let's sort by createdAt desc roughly to match individual queries
-        // But we lost raw date in map. Let's rely on frontend or just simplistic concat for now.
-        // Actually, let's just return them.
+        // --- Sorting ---
+        // Re-sort by date descending since we merged multiple streams
+        allLeads.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-        res.status(http.OK).json(allLeads);
+        // --- Pagination ---
+        const total = allLeads.length;
+        const totalPages = Math.ceil(total / limitNum);
+        const paginatedLeads = allLeads.slice(offset, offset + limitNum);
+
+        res.status(http.OK).json({
+            data: paginatedLeads,
+            meta: {
+                total,
+                page: pageNum,
+                limit: limitNum,
+                totalPages
+            }
+        });
 
     } catch (error: any) {
         console.error("Error fetching all leads:", error);
@@ -339,6 +436,88 @@ export const assignLead = async (req: Request, res: Response) => {
         console.error("Error assigning lead:", error);
         res.status(http.INTERNAL_SERVER_ERROR).json({
             message: "Error assigning lead",
+            error: error.message
+        });
+    }
+};
+
+export const updateLeadStatus = async (req: Request, res: Response) => {
+    try {
+        const { id, status } = req.body; // id is "TYPE_ID" e.g. "VEHICLE_123"
+
+        if (!id || !status) {
+            return res.status(http.BAD_REQUEST).json({ message: "Missing id or status" });
+        }
+
+        const [type, dbIdStr] = id.split("_");
+        const leadId = Number(dbIdStr);
+
+        if (!type || isNaN(leadId)) {
+            return res.status(http.BAD_REQUEST).json({ message: "Invalid ID format" });
+        }
+
+        let model: any;
+        let historyModel: any;
+        let historyForeignKey: string;
+
+        switch (type) {
+            case 'VEHICLE':
+                model = VehicleSale;
+                historyModel = VehicleSaleHistory;
+                historyForeignKey = 'vehicle_sale_id';
+                break;
+            case 'FAST_TRACK':
+                model = FastTrackSale;
+                historyModel = FastTrackSaleHistory;
+                historyForeignKey = 'fast_track_sale_id';
+                break;
+            case 'SPARE_PART':
+                model = SparePartSale;
+                historyModel = SparePartSaleHistory;
+                historyForeignKey = 'spare_part_sale_id';
+                break;
+            case 'SERVICE_PARK':
+                model = ServiceParkSale;
+                historyModel = ServiceParkSaleHistory;
+                historyForeignKey = 'service_park_sale_id';
+                break;
+            case 'BYD':
+                model = BydSale;
+                historyModel = BydSaleHistory;
+                historyForeignKey = 'byd_sale_id';
+                break;
+            default: return res.status(http.BAD_REQUEST).json({ message: "Unknown lead type" });
+        }
+
+        const lead = await model.findByPk(leadId);
+        if (!lead) {
+            return res.status(http.NOT_FOUND).json({ message: "Lead not found" });
+        }
+
+        // Update Status
+        const oldStatus = lead.status;
+        await lead.update({ status: status.toUpperCase() });
+
+        // History
+        const loggedInUserId = (req as any).user?.id || req.body.adminId;
+        if (historyModel && loggedInUserId) {
+            await historyModel.create({
+                [historyForeignKey]: leadId,
+                action_by: loggedInUserId,
+                action_type: "STATUS_UPDATE",
+                details: `Status updated from ${oldStatus} to ${status}`,
+                previous_level: lead.current_level || 'N/A', // Assuming level exists or optional
+                new_level: lead.current_level || 'N/A',
+                timestamp: new Date()
+            }).catch((err: any) => console.error("History creation failed", err));
+        }
+
+        res.status(http.OK).json({ message: "Status updated successfully" });
+
+    } catch (error: any) {
+        console.error("Error updating lead status:", error);
+        res.status(http.INTERNAL_SERVER_ERROR).json({
+            message: "Error updating status",
             error: error.message
         });
     }
