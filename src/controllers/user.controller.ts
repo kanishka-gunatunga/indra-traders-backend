@@ -160,12 +160,19 @@ export const login = async (req: Request, res: Response) => {
 
 export const getUsers = async (req: Request, res: Response) => {
     try {
-        const { user_role, department, branch } = req.query;
+        const { user_role, department, branch, search } = req.query;
 
         const where: any = {};
         if (user_role) where.user_role = user_role;
         if (department) where.department = department;
         if (branch) where.branch = branch;
+
+        if (search) {
+            where[Op.or] = [
+                { full_name: { [Op.like]: `%${search}%` } },
+                { email: { [Op.like]: `%${search}%` } }
+            ];
+        }
 
         const users = await User.findAll({ where });
         res.json(users);
@@ -316,6 +323,10 @@ export const updateUser = async (req: Request, res: Response) => {
         }
 
         if (updateData.password) {
+            if (req.body.confirm_password !== updateData.password) {
+                await t.rollback();
+                return res.status(http.BAD_REQUEST).json({ message: "Passwords do not match" });
+            }
             updateData.password = await bcrypt.hash(updateData.password, 10);
         }
 

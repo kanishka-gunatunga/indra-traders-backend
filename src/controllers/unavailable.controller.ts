@@ -58,9 +58,16 @@ export const getAllUnavailableVehicleSales = async (req: Request, res: Response)
         const limit = parseInt(req.query.limit as string) || 10;
         const offset = (page - 1) * limit;
 
-        const { make, model, year } = req.query;
+        const { make, model, year, search } = req.query;
 
         const whereClause: any = {};
+
+        if (search) {
+            whereClause[Op.or] = [
+                { vehicle_make: { [Op.like]: `%${search}%` } },
+                { vehicle_model: { [Op.like]: `%${search}%` } }
+            ];
+        }
 
         if (make) {
             whereClause.vehicle_make = { [Op.like]: `%${make}%` };
@@ -147,7 +154,12 @@ export const getAllUnavailableServices = async (req: Request, res: Response) => 
         const whereClause: any = {};
 
         if (search) {
-            whereClause.note = { [Op.like]: `%${search}%` };
+            whereClause[Op.or] = [
+                { note: { [Op.like]: `%${search}%` } },
+                { unavailable_repair: { [Op.like]: `%${search}%` } },
+                { unavailable_paint: { [Op.like]: `%${search}%` } },
+                { unavailable_add_on: { [Op.like]: `%${search}%` } }
+            ];
         }
         if (unavailable_repair) {
             whereClause.unavailable_repair = { [Op.like]: `%${unavailable_repair}%` };
@@ -225,9 +237,17 @@ export const getAllUnavailableSpareParts = async (req: Request, res: Response) =
         const limit = parseInt(req.query.limit as string) || 10;
         const offset = (page - 1) * limit;
 
-        const { make, model, part_no } = req.query;
+        const { make, model, part_no, search } = req.query;
 
         const whereClause: any = {};
+
+        if (search) {
+            whereClause[Op.or] = [
+                { vehicle_make: { [Op.like]: `%${search}%` } },
+                { vehicle_model: { [Op.like]: `%${search}%` } },
+                { part_no: { [Op.like]: `%${search}%` } }
+            ];
+        }
 
         if (make) {
             whereClause.vehicle_make = { [Op.like]: `%${make}%` };

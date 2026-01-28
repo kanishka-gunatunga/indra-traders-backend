@@ -771,9 +771,16 @@ export const getAllBydUnavailableSales = async (req: Request, res: Response) => 
         const limit = parseInt(req.query.limit as string) || 10;
         const offset = (page - 1) * limit;
 
-        const { model, year, color } = req.query;
+        const { model, year, color, search } = req.query;
 
         const whereClause: any = {};
+
+        if (search) {
+            whereClause[Op.or] = [
+                { vehicle_model: { [Op.like]: `%${search}%` } },
+                { color: { [Op.like]: `%${search}%` } }
+            ];
+        }
 
         if (model) {
             whereClause.vehicle_model = { [Op.like]: `%${model}%` };
