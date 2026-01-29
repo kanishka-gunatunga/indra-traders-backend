@@ -5,9 +5,27 @@ import { Op } from "sequelize";
 
 const { Service, ServiceParkBooking, Customer, ServiceLine, ServiceParkVehicleHistory } = db;
 
+// Helper function to parse odometer/mileage strings like "234567km" to integer
+function parseOdometerOrMileage(value: string | null | undefined): number | null {
+    if (!value || typeof value !== "string") return null;
+    const trimmed = value.trim();
+    // Extract numbers only (remove "km", spaces, etc.)
+    const match = trimmed.match(/\d+/);
+    if (!match) return null;
+    const num = parseInt(match[0], 10);
+    return isNaN(num) ? null : num;
+}
+
+// Helper function to format odometer/mileage back to string with "km" if it exists
+function formatOdometerOrMileage(value: number | null | undefined): string | null {
+    if (value == null) return null;
+    return `${value}km`;
+}
+
 function toBookingDto(b: any) {
     const sl = b.ServiceLine;
     const cust = b.Customer;
+    const vehicle = b.vehicle;
     const st = b.start_time ? String(b.start_time).slice(0, 5) : "";
     const et = b.end_time ? String(b.end_time).slice(0, 5) : "";
     return {
@@ -18,6 +36,14 @@ function toBookingDto(b: any) {
         vehicle_no: b.vehicle_no ?? null,
         customer_name: cust?.customer_name ?? null,
         phone_number: cust?.phone_number ?? null,
+        email: cust?.email ?? null,
+        address: vehicle?.address ?? null,
+        vehicle_model: vehicle?.vehicle_model ?? null,
+        odometer: formatOdometerOrMileage(vehicle?.odometer),
+        mileage: formatOdometerOrMileage(vehicle?.mileage),
+        oil_type: vehicle?.oil_type ?? null,
+        service_advisor: vehicle?.service_advisor ?? null,
+        vehicle_make: vehicle?.vehicle_make ?? null,
         status: b.status,
         line_id: sl?.id ?? null,
         service_type: sl?.type ?? null,
@@ -83,7 +109,13 @@ export const getBookings = async (req: Request, res: Response) => {
         const bookings = await ServiceParkBooking.findAll({
             where,
             include: [
-                { model: Customer, attributes: ["id", "customer_name", "phone_number"] },
+                { model: Customer, attributes: ["id", "customer_name", "phone_number", "email"] },
+                {
+                    model: ServiceParkVehicleHistory,
+                    as: "vehicle",
+                    attributes: ["address", "odometer", "mileage", "oil_type", "service_advisor", "vehicle_model", "vehicle_make"],
+                    required: false,
+                },
                 serviceLineInclude,
             ],
             order: [["start_time", "ASC"]],
@@ -113,7 +145,13 @@ export const getBookingById = async (req: Request, res: Response) => {
 
         const booking = await ServiceParkBooking.findByPk(id, {
             include: [
-                { model: Customer, attributes: ["id", "customer_name", "phone_number"] },
+                { model: Customer, attributes: ["id", "customer_name", "phone_number", "email"] },
+                {
+                    model: ServiceParkVehicleHistory,
+                    as: "vehicle",
+                    attributes: ["address", "odometer", "mileage", "oil_type", "service_advisor", "vehicle_model", "vehicle_make"],
+                    required: false,
+                },
                 { model: ServiceLine, attributes: ["id", "name", "type"] },
             ],
         });
@@ -145,6 +183,14 @@ export const createBooking = async (req: Request, res: Response) => {
             vehicle_no,
             customer_name,
             phone_number,
+            email,
+            address,
+            vehicle_model,
+            odometer,
+            mileage,
+            oil_type,
+            service_advisor,
+            vehicle_make,
             status,
         } = req.body;
 
@@ -189,6 +235,16 @@ export const createBooking = async (req: Request, res: Response) => {
         const trimmedVehicleNo = String(vehicle_no).trim();
         const trimmedCustomerName = String(customer_name).trim();
         const trimmedPhone = String(phone_number).trim();
+        const trimmedEmail = email ? String(email).trim() : null;
+        const trimmedAddress = address ? String(address).trim() : null;
+        const trimmedOilType = oil_type ? String(oil_type).trim() : null;
+        const trimmedServiceAdvisor = service_advisor ? String(service_advisor).trim() : null;
+        const trimmedVehicleModel = vehicle_model ? String(vehicle_model).trim() : null;
+        const trimmedVehicleMake = vehicle_make ? String(vehicle_make).trim() : null;
+
+        // Parse odometer and mileage from strings like "234567km" to integers
+        const parsedOdometer = parseOdometerOrMileage(odometer);
+        const parsedMileage = parseOdometerOrMileage(mileage);
 
         const allowedStatuses = ["PENDING", "BOOKED", "COMPLETED"];
         const finalStatus = status && allowedStatuses.includes(String(status).toUpperCase())
@@ -202,19 +258,47 @@ export const createBooking = async (req: Request, res: Response) => {
                 id: `CUS${Date.now()}`,
                 customer_name: trimmedCustomerName,
                 phone_number: trimmedPhone,
+                email: trimmedEmail,
             } as any);
+        } else {
+            // Update customer email if provided and not already set
+            if (trimmedEmail && !customer.email) {
+                await customer.update({ email: trimmedEmail });
+            }
         }
 
-        // Adding data to vehicle_histories if not exists
+        // Find or create vehicle history
         let vehicle = await ServiceParkVehicleHistory.findOne({ where: { vehicle_no: trimmedVehicleNo } });
         if (!vehicle) {
             vehicle = await ServiceParkVehicleHistory.create({
                 vehicle_no: trimmedVehicleNo,
+                vehicle_model: trimmedVehicleModel,
+                vehicle_make: trimmedVehicleMake,
                 customer_id: customer.id,
                 owner_name: trimmedCustomerName,
                 contact_no: trimmedPhone,
-                odometer: 0,
+                email: trimmedEmail,
+                address: trimmedAddress,
+                odometer: parsedOdometer ?? 0,
+                mileage: parsedMileage ?? null,
+                oil_type: trimmedOilType,
+                service_advisor: trimmedServiceAdvisor,
             } as any);
+        } else {
+            // Update vehicle history with new data if provided
+            const updateData: any = {};
+            if (trimmedEmail && !vehicle.email) updateData.email = trimmedEmail;
+            if (trimmedAddress && !vehicle.address) updateData.address = trimmedAddress;
+            if (parsedOdometer != null && vehicle.odometer === 0) updateData.odometer = parsedOdometer;
+            if (parsedMileage != null && !vehicle.mileage) updateData.mileage = parsedMileage;
+            if (trimmedOilType && !vehicle.oil_type) updateData.oil_type = trimmedOilType;
+            if (trimmedServiceAdvisor && !vehicle.service_advisor) updateData.service_advisor = trimmedServiceAdvisor;
+            if (trimmedVehicleModel && !vehicle.vehicle_model) updateData.vehicle_model = trimmedVehicleModel;
+            if (trimmedVehicleMake && !vehicle.vehicle_make) updateData.vehicle_make = trimmedVehicleMake;
+
+            if (Object.keys(updateData).length > 0) {
+                await vehicle.update(updateData);
+            }
         }
 
         const existing = await ServiceParkBooking.findOne({
@@ -245,7 +329,13 @@ export const createBooking = async (req: Request, res: Response) => {
 
         const created = await ServiceParkBooking.findByPk(booking.id, {
             include: [
-                { model: Customer, attributes: ["customer_name", "phone_number"] },
+                { model: Customer, attributes: ["customer_name", "phone_number", "email"] },
+                {
+                    model: ServiceParkVehicleHistory,
+                    as: "vehicle",
+                    attributes: ["address", "odometer", "mileage", "oil_type", "service_advisor", "vehicle_model", "vehicle_make"],
+                    required: false,
+                },
                 { model: ServiceLine, attributes: ["id", "name", "type"] },
             ],
         });
@@ -281,7 +371,13 @@ export const updateBooking = async (req: Request, res: Response) => {
 
         const booking = await ServiceParkBooking.findByPk(id, {
             include: [
-                { model: Customer, attributes: ["customer_name", "phone_number"] },
+                { model: Customer, attributes: ["customer_name", "phone_number", "email"] },
+                {
+                    model: ServiceParkVehicleHistory,
+                    as: "vehicle",
+                    attributes: ["address", "odometer", "mileage", "oil_type", "service_advisor", "vehicle_model", "vehicle_make"],
+                    required: false,
+                },
                 { model: ServiceLine, attributes: ["id", "name", "type"] },
             ],
         });
@@ -293,7 +389,13 @@ export const updateBooking = async (req: Request, res: Response) => {
 
         const updated = await ServiceParkBooking.findByPk(booking.id, {
             include: [
-                { model: Customer, attributes: ["customer_name", "phone_number"] },
+                { model: Customer, attributes: ["customer_name", "phone_number", "email"] },
+                {
+                    model: ServiceParkVehicleHistory,
+                    as: "vehicle",
+                    attributes: ["address", "odometer", "mileage", "oil_type", "service_advisor", "vehicle_model", "vehicle_make"],
+                    required: false,
+                },
                 { model: ServiceLine, attributes: ["id", "name", "type"] },
             ],
         });
