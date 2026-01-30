@@ -192,6 +192,7 @@ export const createBooking = async (req: Request, res: Response) => {
             service_advisor,
             vehicle_make,
             status,
+            service_center, // Branch name in uppercase for vehicle_histories table
         } = req.body;
 
         if (
@@ -251,6 +252,8 @@ export const createBooking = async (req: Request, res: Response) => {
             ? String(status).toUpperCase()
             : "BOOKED";
 
+        const trimmedServiceCenter = service_center ? String(service_center).trim() : null;
+
         // Find or create customer by phone
         let customer = await Customer.findOne({ where: { phone_number: trimmedPhone } });
         if (!customer) {
@@ -259,11 +262,20 @@ export const createBooking = async (req: Request, res: Response) => {
                 customer_name: trimmedCustomerName,
                 phone_number: trimmedPhone,
                 email: trimmedEmail,
+                vehicle_number: trimmedVehicleNo,
+                convenient_branch: trimmedServiceCenter,
+                gender: null,  
+                lead_source: "Walk In"
             } as any);
         } else {
-            // Update customer email if provided and not already set
-            if (trimmedEmail && !customer.email) {
-                await customer.update({ email: trimmedEmail });
+            
+            const customerUpdates: any = {};
+            if (trimmedEmail && !customer.email) customerUpdates.email = trimmedEmail;
+            if (trimmedVehicleNo && !customer.vehicle_number) customerUpdates.vehicle_number = trimmedVehicleNo;
+            if (trimmedServiceCenter && !customer.convenient_branch) customerUpdates.convenient_branch = trimmedServiceCenter;
+            
+            if (Object.keys(customerUpdates).length > 0) {
+                await customer.update(customerUpdates);
             }
         }
 
@@ -283,6 +295,7 @@ export const createBooking = async (req: Request, res: Response) => {
                 mileage: parsedMileage ?? null,
                 oil_type: trimmedOilType,
                 service_advisor: trimmedServiceAdvisor,
+                service_center: trimmedServiceCenter, 
             } as any);
         } else {
             // Update vehicle history with new data if provided
@@ -295,6 +308,7 @@ export const createBooking = async (req: Request, res: Response) => {
             if (trimmedServiceAdvisor && !vehicle.service_advisor) updateData.service_advisor = trimmedServiceAdvisor;
             if (trimmedVehicleModel && !vehicle.vehicle_model) updateData.vehicle_model = trimmedVehicleModel;
             if (trimmedVehicleMake && !vehicle.vehicle_make) updateData.vehicle_make = trimmedVehicleMake;
+            if (trimmedServiceCenter) updateData.service_center = trimmedServiceCenter;
 
             if (Object.keys(updateData).length > 0) {
                 await vehicle.update(updateData);
