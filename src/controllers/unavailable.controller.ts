@@ -1,8 +1,9 @@
-import {Request, Response} from "express";
+import { Request, Response } from "express";
 import db from "../models";
 import http from "http-status-codes";
+import { Op } from "sequelize";
 
-const {UnavailableVehicleSale, UnavailableSparePart, UnavailableService} = db;
+const { UnavailableVehicleSale, UnavailableSparePart, UnavailableService } = db;
 
 export const createUnavailableVehicleSale = async (req: Request, res: Response) => {
     try {
@@ -29,7 +30,7 @@ export const createUnavailableVehicleSale = async (req: Request, res: Response) 
             !price_from ||
             !price_to
         ) {
-            return res.status(http.BAD_REQUEST).json({message: "All fields are required"});
+            return res.status(http.BAD_REQUEST).json({ message: "All fields are required" });
         }
 
         const sale = await UnavailableVehicleSale.create({
@@ -47,29 +48,68 @@ export const createUnavailableVehicleSale = async (req: Request, res: Response) 
         res.status(http.CREATED).json(sale);
     } catch (error) {
         console.error("Error creating unavailable vehicle sale:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
-export const getAllUnavailableVehicleSales = async (_req: Request, res: Response) => {
+export const getAllUnavailableVehicleSales = async (req: Request, res: Response) => {
     try {
-        const data = await UnavailableVehicleSale.findAll({order: [["createdAt", "DESC"]]});
-        res.status(http.OK).json(data);
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 10;
+        const offset = (page - 1) * limit;
+
+        const { make, model, year, search } = req.query;
+
+        const whereClause: any = {};
+
+        if (search) {
+            whereClause[Op.or] = [
+                { vehicle_make: { [Op.like]: `%${search}%` } },
+                { vehicle_model: { [Op.like]: `%${search}%` } }
+            ];
+        }
+
+        if (make) {
+            whereClause.vehicle_make = { [Op.like]: `%${make}%` };
+        }
+        if (model) {
+            whereClause.vehicle_model = { [Op.like]: `%${model}%` };
+        }
+        if (year) {
+            whereClause.manufacture_year = year;
+        }
+
+        const { count, rows } = await UnavailableVehicleSale.findAndCountAll({
+            where: whereClause,
+            order: [["createdAt", "DESC"]],
+            limit,
+            offset
+        });
+
+        res.status(http.OK).json({
+            data: rows,
+            meta: {
+                total: count,
+                page,
+                limit,
+                totalPages: Math.ceil(count / limit)
+            }
+        });
     } catch (error) {
         console.error("Error fetching unavailable vehicle sales:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
 export const getUnavailableVehicleSaleById = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const record = await UnavailableVehicleSale.findByPk(id);
-        if (!record) return res.status(http.NOT_FOUND).json({message: "Record not found"});
+        if (!record) return res.status(http.NOT_FOUND).json({ message: "Record not found" });
         res.status(http.OK).json(record);
     } catch (error) {
         console.error("Error fetching unavailable vehicle sale:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -85,7 +125,7 @@ export const createUnavailableService = async (req: Request, res: Response) => {
         } = req.body;
 
         if (!call_agent_id || !note) {
-            return res.status(http.BAD_REQUEST).json({message: "call_agent_id and note are required"});
+            return res.status(http.BAD_REQUEST).json({ message: "call_agent_id and note are required" });
         }
 
         const service = await UnavailableService.create({
@@ -99,29 +139,66 @@ export const createUnavailableService = async (req: Request, res: Response) => {
         res.status(http.CREATED).json(service);
     } catch (error) {
         console.error("Error creating unavailable service:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
-export const getAllUnavailableServices = async (_req: Request, res: Response) => {
+export const getAllUnavailableServices = async (req: Request, res: Response) => {
     try {
-        const data = await UnavailableService.findAll({order: [["createdAt", "DESC"]]});
-        res.status(http.OK).json(data);
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 10;
+        const offset = (page - 1) * limit;
+
+        const { search, unavailable_repair, unavailable_paint } = req.query;
+
+        const whereClause: any = {};
+
+        if (search) {
+            whereClause[Op.or] = [
+                { note: { [Op.like]: `%${search}%` } },
+                { unavailable_repair: { [Op.like]: `%${search}%` } },
+                { unavailable_paint: { [Op.like]: `%${search}%` } },
+                { unavailable_add_on: { [Op.like]: `%${search}%` } }
+            ];
+        }
+        if (unavailable_repair) {
+            whereClause.unavailable_repair = { [Op.like]: `%${unavailable_repair}%` };
+        }
+        if (unavailable_paint) {
+            whereClause.unavailable_paint = { [Op.like]: `%${unavailable_paint}%` };
+        }
+
+        const { count, rows } = await UnavailableService.findAndCountAll({
+            where: whereClause,
+            order: [["createdAt", "DESC"]],
+            limit,
+            offset
+        });
+
+        res.status(http.OK).json({
+            data: rows,
+            meta: {
+                total: count,
+                page,
+                limit,
+                totalPages: Math.ceil(count / limit)
+            }
+        });
     } catch (error) {
         console.error("Error fetching unavailable services:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
 export const getUnavailableServiceById = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const record = await UnavailableService.findByPk(id);
-        if (!record) return res.status(http.NOT_FOUND).json({message: "Record not found"});
+        if (!record) return res.status(http.NOT_FOUND).json({ message: "Record not found" });
         res.status(http.OK).json(record);
     } catch (error) {
         console.error("Error fetching unavailable service:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -136,7 +213,7 @@ export const createUnavailableSparePart = async (req: Request, res: Response) =>
         } = req.body;
 
         if (!call_agent_id || !vehicle_make || !vehicle_model || !part_no || !year_of_manufacture) {
-            return res.status(http.BAD_REQUEST).json({message: "All fields are required"});
+            return res.status(http.BAD_REQUEST).json({ message: "All fields are required" });
         }
 
         const record = await UnavailableSparePart.create({
@@ -150,28 +227,68 @@ export const createUnavailableSparePart = async (req: Request, res: Response) =>
         res.status(http.CREATED).json(record);
     } catch (error) {
         console.error("Error creating unavailable spare part:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
-export const getAllUnavailableSpareParts = async (_req: Request, res: Response) => {
+export const getAllUnavailableSpareParts = async (req: Request, res: Response) => {
     try {
-        const data = await UnavailableSparePart.findAll({order: [["createdAt", "DESC"]]});
-        res.status(http.OK).json(data);
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 10;
+        const offset = (page - 1) * limit;
+
+        const { make, model, part_no, search } = req.query;
+
+        const whereClause: any = {};
+
+        if (search) {
+            whereClause[Op.or] = [
+                { vehicle_make: { [Op.like]: `%${search}%` } },
+                { vehicle_model: { [Op.like]: `%${search}%` } },
+                { part_no: { [Op.like]: `%${search}%` } }
+            ];
+        }
+
+        if (make) {
+            whereClause.vehicle_make = { [Op.like]: `%${make}%` };
+        }
+        if (model) {
+            whereClause.vehicle_model = { [Op.like]: `%${model}%` };
+        }
+        if (part_no) {
+            whereClause.part_no = { [Op.like]: `%${part_no}%` };
+        }
+
+        const { count, rows } = await UnavailableSparePart.findAndCountAll({
+            where: whereClause,
+            order: [["createdAt", "DESC"]],
+            limit,
+            offset
+        });
+
+        res.status(http.OK).json({
+            data: rows,
+            meta: {
+                total: count,
+                page,
+                limit,
+                totalPages: Math.ceil(count / limit)
+            }
+        });
     } catch (error) {
         console.error("Error fetching unavailable spare parts:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
 export const getUnavailableSparePartById = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const record = await UnavailableSparePart.findByPk(id);
-        if (!record) return res.status(http.NOT_FOUND).json({message: "Record not found"});
+        if (!record) return res.status(http.NOT_FOUND).json({ message: "Record not found" });
         res.status(http.OK).json(record);
     } catch (error) {
         console.error("Error fetching unavailable spare part:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };

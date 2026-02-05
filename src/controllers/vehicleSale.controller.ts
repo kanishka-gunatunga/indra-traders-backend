@@ -1,11 +1,11 @@
-import {Request, Response} from "express";
+import { Request, Response } from "express";
 import db from "../models";
 import http from "http-status-codes";
-import {Op} from "sequelize";
-import {logActivity} from "../services/logActivity";
-import {sendNotification} from "../services/notification";
+import { Op } from "sequelize";
+import { logActivity } from "../services/logActivity";
+import { sendNotification } from "../services/notification";
 
-const {User, VehicleSale, Customer, VehicleSaleReminder, VehicleSaleFollowup, VehicleSaleHistory} = db;
+const { User, VehicleSale, Customer, VehicleSaleReminder, VehicleSaleFollowup, VehicleSaleHistory } = db;
 
 const getLevelFromRole = (role: string): number => {
     if (role === "SALES01") return 1;
@@ -102,12 +102,12 @@ export const createVehicleSale = async (req: Request, res: Response) => {
         const creatorUser = await User.findByPk(creatorId);
 
         if (!creatorUser) {
-            return res.status(http.BAD_REQUEST).json({message: "Creator user not found"});
+            return res.status(http.BAD_REQUEST).json({ message: "Creator user not found" });
         }
 
         const userBranch = creatorUser.branch;
 
-        let customerRecord = await Customer.findOne({where: {phone_number: contact_number}});
+        let customerRecord = await Customer.findOne({ where: { phone_number: contact_number } });
 
         if (!customerRecord) {
             customerRecord = await Customer.create({
@@ -231,7 +231,7 @@ export const createVehicleSale = async (req: Request, res: Response) => {
         });
     } catch (error) {
         console.error("Error creating vehicle sale:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -329,7 +329,7 @@ export const getVehicleSales = async (req: Request, res: Response) => {
         const currentUser = await User.findByPk(userId);
 
         if (!currentUser) {
-            return res.status(http.UNAUTHORIZED).json({message: "User not authenticated"});
+            return res.status(http.UNAUTHORIZED).json({ message: "User not authenticated" });
         }
 
         const userRole = (req as any).user?.user_role || req.query.userRole;
@@ -337,15 +337,55 @@ export const getVehicleSales = async (req: Request, res: Response) => {
 
         const userLevel = getLevelFromRole(userRole);
 
-        // 2. Parse Status Query
-        const statusParam = req.query.status;
+        // --- FILTER PARAMS ---
+        const statusParam = req.query.status as string;
+        const search = req.query.search as string;
+        const priority = req.query.priority as string;
+        const startDate = req.query.startDate as string;
+        const endDate = req.query.endDate as string;
+
         const status = typeof statusParam === "string" ? statusParam.toUpperCase() : undefined;
 
         let whereClause: any = {};
 
+        // 1. Base Filters (Search, Priority, Date)
+        if (search) {
+            whereClause[Op.or] = [
+                { ticket_number: { [Op.like]: `%${search}%` } },
+                { '$customer.customer_name$': { [Op.like]: `%${search}%` } },
+                { '$customer.phone_number$': { [Op.like]: `%${search}%` } },
+                { '$customer.email$': { [Op.like]: `%${search}%` } }
+            ];
+        }
+
+        if (priority) {
+            // Assuming priority passed as "P0", "P1" etc. or just number "0", "1"
+            const pVal = priority.toUpperCase().replace("P", "");
+            if (!isNaN(Number(pVal))) {
+                whereClause.priority = Number(pVal);
+            }
+        }
+
+        if (startDate && endDate) {
+            whereClause.date = {
+                [Op.between]: [new Date(startDate), new Date(endDate)]
+            };
+        } else if (startDate) {
+            whereClause.date = {
+                [Op.gte]: new Date(startDate)
+            };
+        } else if (endDate) {
+            whereClause.date = {
+                [Op.lte]: new Date(endDate)
+            };
+        }
+
+
+        // 2. Role Based Access Control & Status Filtering
+
         // --- ADMIN VIEW (See All) ---
         if (userRole === "ADMIN") {
-            if (status) whereClause.status = status;
+            if (status && status !== "ALL STATUS") whereClause.status = status;
         }
 
         // --- SALES AGENT VIEW (Strict Isolation) ---
@@ -353,14 +393,11 @@ export const getVehicleSales = async (req: Request, res: Response) => {
             whereClause.branch = userBranch;
 
             if (userLevel > 0) {
-
                 // RULE 1: Level Isolation
-                // An agent can ONLY see leads sitting at their specific level.
                 whereClause.current_level = userLevel;
 
                 // RULE 2 & 3: Pool vs Assignment
-                if (status) {
-                    // Case A: Filtering by specific status tab (e.g., clicking "Ongoing" tab)
+                if (status && status !== "ALL STATUS") {
                     if (status === "NEW") {
                         // Shared Pool: See ALL 'NEW' leads at this level
                         whereClause.status = "NEW";
@@ -370,18 +407,21 @@ export const getVehicleSales = async (req: Request, res: Response) => {
                         whereClause.assigned_sales_id = userId;
                     }
                 } else {
-                    // Case B: Dashboard / Kanban View (No status filter passed)
-                    // Show: (Any 'NEW' lead at this level) OR (Any lead at this level assigned to me)
+                    // Dashboard View (No specific status filter or "All Status")
+                    // If filtering by search/priority/date, we still need to respect visibility rules
+
+                    // Complex Logic:
+                    // (Status is 'NEW') OR (Assigned to Me AND Status != 'NEW')
+
                     whereClause[Op.and] = [
-                        {current_level: userLevel}, // Re-enforce level check
-                        {branch: userBranch},
+                        ...(whereClause[Op.and] || []), // Preserve existing AND conditions if any
                         {
                             [Op.or]: [
-                                {status: "NEW"},
+                                { status: "NEW" },
                                 {
                                     [Op.and]: [
-                                        {status: {[Op.ne]: "NEW"}}, // Status is NOT 'NEW'
-                                        {assigned_sales_id: userId}    // AND assigned to user
+                                        { status: { [Op.ne]: "NEW" } },
+                                        { assigned_sales_id: userId }
                                     ]
                                 }
                             ]
@@ -389,20 +429,18 @@ export const getVehicleSales = async (req: Request, res: Response) => {
                     ];
                 }
             }
-
             // --- CALL AGENT / FALLBACK ---
             else {
-                // Only see what they created (optional, adjust as needed)
-                // whereClause.call_agent_id = userId;
+                // logic for call agent if needed
             }
         }
 
         const sales = await VehicleSale.findAll({
             where: whereClause,
             include: [
-                {model: Customer, as: "customer"},
-                {model: User, as: "salesUser"}, // Assigned User
-                {model: User, as: "callAgent"}, // Creator
+                { model: Customer, as: "customer" },
+                { model: User, as: "salesUser" },
+                { model: User, as: "callAgent" },
             ],
             order: [["createdAt", "DESC"]],
         });
@@ -410,7 +448,7 @@ export const getVehicleSales = async (req: Request, res: Response) => {
         res.status(http.OK).json(sales);
     } catch (error) {
         console.error("Error fetching vehicle sales:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -418,13 +456,13 @@ export const getVehicleSales = async (req: Request, res: Response) => {
 export const promoteToNextLevel = async (req: Request, res: Response) => {
     const t = await db.sequelize.transaction();
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const userId = (req as any).user?.id || req.body.userId;
 
         const sale = await VehicleSale.findByPk(id);
         if (!sale) {
             await t.rollback();
-            return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+            return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
         }
 
         const currentLevel = sale.current_level;
@@ -432,13 +470,13 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
 
         if (nextLevel > 3) {
             await t.rollback();
-            return res.status(http.BAD_REQUEST).json({message: "Already at maximum sales level"});
+            return res.status(http.BAD_REQUEST).json({ message: "Already at maximum sales level" });
         }
 
         sale.status = "NEW";
         sale.current_level = nextLevel;
         sale.assigned_sales_id = null;
-        await sale.save({transaction: t});
+        await sale.save({ transaction: t });
 
         await VehicleSaleHistory.create({
             vehicle_sale_id: sale.id,
@@ -448,7 +486,7 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
             new_level: nextLevel,
             details: `Lead escalated from Level ${currentLevel} to Level ${nextLevel}`,
             timestamp: new Date()
-        } as any, {transaction: t});
+        } as any, { transaction: t });
 
 
         logActivity({
@@ -465,75 +503,75 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
         });
 
         await t.commit();
-        res.status(http.OK).json({message: `Lead promoted to Sales Level ${nextLevel}`, sale});
+        res.status(http.OK).json({ message: `Lead promoted to Sales Level ${nextLevel}`, sale });
 
     } catch (error) {
         await t.rollback();
         console.error("Error promoting sale:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
 export const getSaleHistory = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const history = await VehicleSaleHistory.findAll({
-            where: {vehicle_sale_id: id},
+            where: { vehicle_sale_id: id },
             order: [["timestamp", "DESC"]],
-            include: [{model: User, as: "actor", attributes: ['full_name', 'user_role']}]
+            include: [{ model: User, as: "actor", attributes: ['full_name', 'user_role'] }]
         });
         res.status(http.OK).json(history);
     } catch (error) {
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error fetching history"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching history" });
     }
 };
 
 
 export const getSaleByTicketID = async (req: Request, res: Response) => {
     try {
-        const {ticketNumber} = req.params;
+        const { ticketNumber } = req.params;
 
         if (!ticketNumber)
-            return res.status(http.BAD_REQUEST).json({message: "Ticket number is required"});
+            return res.status(http.BAD_REQUEST).json({ message: "Ticket number is required" });
 
         const sale = await VehicleSale.findOne({
-            where: {ticket_number: ticketNumber},
+            where: { ticket_number: ticketNumber },
             include: [
-                {model: Customer, as: "customer"},
-                {model: User, as: "callAgent"},
-                {model: User, as: "salesUser"},
+                { model: Customer, as: "customer" },
+                { model: User, as: "callAgent" },
+                { model: User, as: "salesUser" },
                 {
                     model: VehicleSaleFollowup, as: "followups", order: [["activity_date", "DESC"]],
                     include: [
-                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                        { model: User, as: "creator", attributes: ["full_name", "user_role"] }
                     ]
                 },
                 {
                     model: VehicleSaleReminder, as: "reminders", order: [["task_date", "ASC"]],
                     include: [
-                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                        { model: User, as: "creator", attributes: ["full_name", "user_role"] }
                     ]
                 }
             ],
         });
 
         if (!sale)
-            return res.status(http.NOT_FOUND).json({message: "Sale not found with this ticket number"});
+            return res.status(http.NOT_FOUND).json({ message: "Sale not found with this ticket number" });
 
         res.status(http.OK).json(sale);
     } catch (error) {
         console.error("Error fetching sale by ticket number:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
 export const assignVehicleSale = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
-        const {salesUserId} = req.body;
+        const { id } = req.params;
+        const { salesUserId } = req.body;
 
         const sale = await VehicleSale.findByPk(id);
-        if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+        if (!sale) return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
 
         const previousAssignee = sale.assigned_sales_id;
 
@@ -564,20 +602,20 @@ export const assignVehicleSale = async (req: Request, res: Response) => {
             referenceModule: "VEHICLE_SALE"
         });
 
-        res.status(http.OK).json({message: "Sale assigned successfully", sale});
+        res.status(http.OK).json({ message: "Sale assigned successfully", sale });
     } catch (error) {
         console.error("Error assigning sale:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
 export const updateSaleStatus = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
-        const {status} = req.body;
+        const { id } = req.params;
+        const { status } = req.body;
 
         const sale = await VehicleSale.findByPk(id);
-        if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+        if (!sale) return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
 
         const oldStatus = sale.status;
 
@@ -608,18 +646,18 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
             });
         }
 
-        res.status(http.OK).json({message: "Sale status updated", sale});
+        res.status(http.OK).json({ message: "Sale status updated", sale });
     } catch (error) {
         console.error("Error updating sale:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
 export const deleteVehicleSale = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const sale = await VehicleSale.findByPk(id);
-        if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+        if (!sale) return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
 
         const saleDetails = {
             ticket: sale.ticket_number,
@@ -637,10 +675,10 @@ export const deleteVehicleSale = async (req: Request, res: Response) => {
             changes: ""
         });
 
-        res.status(http.OK).json({message: "Vehicle sale deleted"});
+        res.status(http.OK).json({ message: "Vehicle sale deleted" });
     } catch (error) {
         console.error("Error deleting sale:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -674,16 +712,16 @@ export const deleteVehicleSale = async (req: Request, res: Response) => {
 export const getVehicleSalesByStatus = async (req: Request, res: Response) => {
     try {
         const userId = (req as any).user?.id || req.query.userId;
-        const {status} = req.params;
+        const { status } = req.params;
         const statusUpper = status.toUpperCase();
 
         let whereClause: any = {};
 
         if (statusUpper === "NEW") {
-            whereClause = {status: "NEW"};
+            whereClause = { status: "NEW" };
         } else {
             if (!userId) {
-                return res.status(http.UNAUTHORIZED).json({message: "User ID required"});
+                return res.status(http.UNAUTHORIZED).json({ message: "User ID required" });
             }
             whereClause = {
                 status: statusUpper,
@@ -695,9 +733,9 @@ export const getVehicleSalesByStatus = async (req: Request, res: Response) => {
         const sales = await VehicleSale.findAll({
             where: whereClause,
             include: [
-                {model: Customer, as: "customer"},
-                {model: User, as: "callAgent"},
-                {model: User, as: "salesUser"},
+                { model: Customer, as: "customer" },
+                { model: User, as: "callAgent" },
+                { model: User, as: "salesUser" },
             ],
             order: [["createdAt", "DESC"]],
         });
@@ -708,20 +746,20 @@ export const getVehicleSalesByStatus = async (req: Request, res: Response) => {
         });
     } catch (error) {
         console.error("Error fetching vehicle sales by status:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
 export const getNearestRemindersBySalesUser = async (req: Request, res: Response) => {
     try {
-        const {userId} = req.params;
+        const { userId } = req.params;
 
         if (!userId) {
-            return res.status(400).json({message: "User ID is required"});
+            return res.status(400).json({ message: "User ID is required" });
         }
 
         const salesWithReminders = await VehicleSale.findAll({
-            where: {assigned_sales_id: userId},
+            where: { assigned_sales_id: userId },
             include: [
                 {
                     model: VehicleSaleReminder,
@@ -740,7 +778,7 @@ export const getNearestRemindersBySalesUser = async (req: Request, res: Response
                     attributes: ["customer_name", "phone_number", "email"],
                 },
             ],
-            order: [[{model: VehicleSaleReminder, as: "reminders"}, "task_date", "ASC"]],
+            order: [[{ model: VehicleSaleReminder, as: "reminders" }, "task_date", "ASC"]],
         });
 
         const nearestReminders = salesWithReminders.flatMap((sale: any) =>
@@ -760,28 +798,28 @@ export const getNearestRemindersBySalesUser = async (req: Request, res: Response
             (a, b) => new Date(a.task_date).getTime() - new Date(b.task_date).getTime()
         );
 
-        return res.status(200).json({data: nearestReminders});
+        return res.status(200).json({ data: nearestReminders });
     } catch (error: any) {
         console.error("getNearestRemindersBySalesUser error:", error);
         return res
             .status(500)
-            .json({message: "Internal server error", error: error.message});
+            .json({ message: "Internal server error", error: error.message });
     }
 };
 
 export const updatePriority = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
-        const {priority} = req.body;
+        const { id } = req.params;
+        const { priority } = req.body;
 
         if (priority === undefined || isNaN(priority)) {
-            return res.status(400).json({message: "Valid priority is required"});
+            return res.status(400).json({ message: "Valid priority is required" });
         }
 
         const sale = await VehicleSale.findByPk(id);
 
         if (!sale) {
-            return res.status(404).json({message: "Sale not found"});
+            return res.status(404).json({ message: "Sale not found" });
         }
 
         const oldPriority = sale.priority;
@@ -795,12 +833,12 @@ export const updatePriority = async (req: Request, res: Response) => {
             actionType: "UPDATE",
             entityId: sale.id,
             description: `Priority changed from ${oldPriority} to ${priority}`,
-            changes: {oldPriority, newPriority: priority}
+            changes: { oldPriority, newPriority: priority }
         });
 
-        return res.status(200).json({message: "Priority updated", sale});
+        return res.status(200).json({ message: "Priority updated", sale });
     } catch (err) {
         console.error("updatePriority error:", err);
-        res.status(500).json({message: "Server error"});
+        res.status(500).json({ message: "Server error" });
     }
 };

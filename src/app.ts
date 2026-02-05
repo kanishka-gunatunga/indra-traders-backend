@@ -27,16 +27,17 @@ import dashboardRoutes from "./routes/dashboard.routes";
 import serviceBookingAuthRoutes from "./routes/serviceBookingAuth.routes";
 import serviceCenterRoutes from "./routes/serviceCenter.routes";
 
-import {handleFacebookMessage} from "./realtime/facebook";
+import { handleFacebookMessage } from "./realtime/facebook";
 import path from "path";
 import leasingBankRoutes from "./routes/leasingBank.routes";
-import {handleWahaWebhook} from "./realtime/wahaWebhook";
+import { handleWahaWebhook } from "./realtime/wahaWebhook";
+import bydSaleRoutes from "./routes/bydSale.routes";
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({extended: true}));
+app.use(express.urlencoded({ extended: true }));
 
 // app.use("/api/v1/uploads", express.static(path.join(process.cwd(), "public/uploads")));
 
@@ -47,7 +48,7 @@ app.use(express.urlencoded({extended: true}));
 // initSocket(io);
 
 app.get("/", (req, res) => {
-    res.json({message: "Hello World!"});
+    res.json({ message: "Hello World!" });
 });
 
 const VERIFY_TOKEN = process.env.FACEBOOK_VERIFY_TOKEN;
@@ -98,6 +99,7 @@ app.use("/api/v1/complaint-followups", complaintFollowupRoutes);
 app.use("/api/v1/complaint-reminders", complaintReminderRoutes);
 app.use("/api/v1/events", eventRoutes);
 app.use("/api/v1/vehicle-sales", vehicleSaleRoutes);
+app.use("/api/v1/byd-sales", bydSaleRoutes);
 app.use("/api/v1/vehicle-sales-followups", vehicleSaleFollowupRoutes);
 app.use("/api/v1/vehicle-sales-reminders", vehicleSaleReminderRoutes);
 app.use("/api/v1/spare-parts", sparePartsRoutes);

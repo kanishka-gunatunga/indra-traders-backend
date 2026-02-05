@@ -506,23 +506,59 @@ export const listServiceParkSales = async (req: Request, res: Response) => {
 
         const userLevel = getLevelFromRole(userRole);
 
-        const statusParam = req.query.status;
-        const status = typeof statusParam === "string" ? statusParam.toUpperCase() : undefined;
+        // --- FILTER PARAMS ---
+        const statusParam = req.query.status as string;
+        const search = req.query.search as string;
+        const priority = req.query.priority as string;
+        const startDate = req.query.startDate as string;
+        const endDate = req.query.endDate as string;
 
+        const status = typeof statusParam === "string" ? statusParam.toUpperCase() : undefined;
 
         let whereClause: any = {};
 
-        if (userRole === "ADMIN") {
-            if (status) whereClause.status = status;
-        } else {
+        // 1. Base Filters (Search, Priority, Date)
+        if (search) {
+            whereClause[Op.or] = [
+                { ticket_number: { [Op.like]: `%${search}%` } },
+                { '$customer.customer_name$': { [Op.like]: `%${search}%` } },
+                { '$customer.phone_number$': { [Op.like]: `%${search}%` } },
+                { '$customer.email$': { [Op.like]: `%${search}%` } }
+            ];
+        }
 
+        if (priority) {
+            const pVal = priority.toUpperCase().replace("P", "");
+            if (!isNaN(Number(pVal))) {
+                whereClause.priority = Number(pVal);
+            }
+        }
+
+        if (startDate && endDate) {
+            whereClause.date = {
+                [Op.between]: [new Date(startDate), new Date(endDate)]
+            };
+        } else if (startDate) {
+            whereClause.date = {
+                [Op.gte]: new Date(startDate)
+            };
+        } else if (endDate) {
+            whereClause.date = {
+                [Op.lte]: new Date(endDate)
+            };
+        }
+
+
+        // 2. Role Based Access Control & Status Filtering
+        if (userRole === "ADMIN") {
+            if (status && status !== "ALL STATUS") whereClause.status = status;
+        } else {
             whereClause.branch = userBranch;
             if (userLevel > 0) {
 
                 whereClause.current_level = userLevel;
 
-                if (status) {
-
+                if (status && status !== "ALL STATUS") {
                     if (status === "NEW") {
                         whereClause.status = "NEW";
                     } else {
@@ -533,6 +569,7 @@ export const listServiceParkSales = async (req: Request, res: Response) => {
                     whereClause[Op.and] = [
                         { current_level: userLevel },
                         { branch: userBranch },
+                        ...(whereClause[Op.and] || []),
                         {
                             [Op.or]: [
                                 { status: "NEW" },
@@ -1543,6 +1580,24 @@ export const createBooking = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "Customer details (ID or Phone/Name) are required." });
         }
 
+        if (vehicle_no) {
+            const existingVehicle = await ServiceParkVehicleHistory.findOne({
+                where: { vehicle_no },
+                transaction: t
+            });
+
+            if (!existingVehicle) {
+                await ServiceParkVehicleHistory.create({
+                    vehicle_no,
+                    customer_id: finalCustomerId,
+                    owner_name: owner_name || "Unknown",
+                    contact_no: contact_no || "Unknown",
+                    odometer: 0,
+                    created_by: (req as any).user?.id || 1,
+                }, { transaction: t });
+            }
+        }
+
 
         const times = slots.map((s: any) => s.start);
         const existing = await ServiceParkBooking.findAll({
@@ -1578,8 +1633,9 @@ export const createBooking = async (req: Request, res: Response) => {
 
         await t.commit();
 
+        const userId = (req as any).user?.id || 1;
         logActivity({
-            userId: customer_id,
+            userId: userId,
             module: "SERVICE_PARK",
             actionType: "CREATE",
             entityId: 0,
@@ -1588,6 +1644,146 @@ export const createBooking = async (req: Request, res: Response) => {
         });
 
         return res.status(http.CREATED).json({ message: "Booking confirmed" });
+
+    } catch (error: any) {
+        await t.rollback();
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ error: error.message });
+    }
+};
+
+export const getBookingById = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const booking = await ServiceParkBooking.findByPk(id, {
+            include: [
+                { model: Customer, attributes: ["customer_name", "phone_number", "email", "city"] },
+                { model: ServiceLine, attributes: ["name", "advisor", "type"] },
+                { model: Branch, attributes: ["name"] }
+            ]
+        });
+
+        if (!booking) {
+            return res.status(http.NOT_FOUND).json({ message: "Booking not found" });
+        }
+
+        // Find all related slots for this appointment (same customer, vehicle, date, line)
+        const relatedBookings = await ServiceParkBooking.findAll({
+            where: {
+                branch_id: booking.branch_id,
+                service_line_id: booking.service_line_id,
+                booking_date: booking.booking_date,
+                customer_id: booking.customer_id,
+                vehicle_no: booking.vehicle_no,
+                status: { [Op.ne]: 'CANCELLED' }
+            },
+            attributes: ['id', 'start_time']
+        });
+
+        const responseData: any = booking.toJSON();
+        responseData.related_slots = relatedBookings.map((b: any) => b.start_time);
+        responseData.related_ids = relatedBookings.map((b: any) => b.id);
+
+        return res.status(http.OK).json(responseData);
+    } catch (error: any) {
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ error: error.message });
+    }
+};
+
+export const cancelBooking = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const booking = await ServiceParkBooking.findByPk(id);
+
+        if (!booking) {
+            return res.status(http.NOT_FOUND).json({ message: "Booking not found" });
+        }
+
+        booking.status = "CANCELLED";
+        await booking.save();
+
+        const userId = (req as any).user?.id || 1;
+
+        logActivity({
+            userId: userId,
+            module: "SERVICE_PARK",
+            actionType: "UPDATE",
+            entityId: booking.id,
+            description: `Booking ${booking.id} cancelled`,
+            changes: { status: "CANCELLED" }
+        });
+
+        return res.status(http.OK).json({ message: "Booking cancelled successfully" });
+    } catch (error: any) {
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ error: error.message });
+    }
+};
+
+export const rescheduleBooking = async (req: Request, res: Response) => {
+    const t = await db.sequelize.transaction();
+    try {
+        const { id } = req.params;
+        const {
+            branch_id, service_line_id, booking_date, slots, // New details
+            customer_id, vehicle_no // Keep existing if not provided? Usually provided in new form
+        } = req.body;
+
+        // 1. Find and Cancel Old Booking
+        const oldBooking = await ServiceParkBooking.findByPk(id);
+        if (!oldBooking) {
+            await t.rollback();
+            return res.status(http.NOT_FOUND).json({ message: "Original booking not found" });
+        }
+
+        oldBooking.status = "CANCELLED";
+        await oldBooking.save({ transaction: t });
+
+
+        // 2. Validate New Slots Availability
+        const times = slots.map((s: any) => s.start);
+        const existing = await ServiceParkBooking.findAll({
+            where: {
+                branch_id,
+                service_line_id,
+                booking_date,
+                start_time: { [Op.in]: times },
+                status: { [Op.ne]: 'CANCELLED' }
+            },
+            transaction: t
+        });
+
+        if (existing.length > 0) {
+            await t.rollback();
+            return res.status(http.CONFLICT).json({ message: "Some new slots are already booked." });
+        }
+
+        // 3. Create New Bookings
+        const bookingRecords = slots.map((slot: any) => ({
+            branch_id,
+            service_line_id,
+            booking_date,
+            start_time: slot.start,
+            end_time: slot.end,
+            status: "BOOKED",
+            customer_id: customer_id || oldBooking.customer_id,
+            vehicle_no: vehicle_no || oldBooking.vehicle_no
+        }));
+
+        await ServiceParkBooking.bulkCreate(bookingRecords, { transaction: t });
+
+        await t.commit();
+
+        const userId = (req as any).user?.id || 1;
+
+        logActivity({
+            userId: userId,
+            module: "SERVICE_PARK",
+            actionType: "UPDATE",
+            entityId: oldBooking.id, // Log against old or use 0?
+            description: `Booking rescheduled from ${oldBooking.booking_date} to ${booking_date}`,
+            changes: { old_id: id, new_date: booking_date, new_slots: slots }
+        });
+
+        return res.status(http.OK).json({ message: "Booking rescheduled successfully" });
 
     } catch (error: any) {
         await t.rollback();

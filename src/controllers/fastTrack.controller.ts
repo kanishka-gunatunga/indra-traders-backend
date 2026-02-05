@@ -558,12 +558,12 @@
 // };
 
 
-import {Request, Response} from "express";
-import {Op} from "sequelize";
+import { Request, Response } from "express";
+import { Op } from "sequelize";
 import db from "../models";
 import http from "http-status-codes";
-import {logActivity} from "../services/logActivity";
-import {sendNotification} from "../services/notification";
+import { logActivity } from "../services/logActivity";
+import { sendNotification } from "../services/notification";
 
 const {
     Customer,
@@ -590,7 +590,7 @@ export const createDirectRequest = async (req: Request, res: Response) => {
     try {
         const payload = req.body;
         const exists = await Customer.findByPk(payload.customer_id);
-        if (!exists) return res.status(http.NOT_FOUND).json({message: "Customer not found"});
+        if (!exists) return res.status(http.NOT_FOUND).json({ message: "Customer not found" });
 
         const rec = await FastTrackRequest.create({
             ...payload,
@@ -600,14 +600,14 @@ export const createDirectRequest = async (req: Request, res: Response) => {
         return res.status(http.CREATED).json(rec);
     } catch (e) {
         console.error("createDirectRequest", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
 /** 2) Telemarketer lists requests with basic filters */
 export const listDirectRequests = async (req: Request, res: Response) => {
     try {
-        const {status, vehicle_type, vehicle_make, vehicle_model} = req.query;
+        const { status, vehicle_type, vehicle_make, vehicle_model } = req.query;
         const where: any = {};
         if (status) where.status = String(status);
         if (vehicle_type) where.vehicle_type = String(vehicle_type);
@@ -617,9 +617,9 @@ export const listDirectRequests = async (req: Request, res: Response) => {
         const rows = await FastTrackRequest.findAll({
             where,
             include: [
-                {model: Customer, as: "customer"},
-                {model: User, as: "callAgent", attributes: ["id", "full_name"]},
-                {model: FastTrackReminder, as: "directReminders"},
+                { model: Customer, as: "customer" },
+                { model: User, as: "callAgent", attributes: ["id", "full_name"] },
+                { model: FastTrackReminder, as: "directReminders" },
             ],
             order: [["createdAt", "DESC"]],
         });
@@ -627,7 +627,7 @@ export const listDirectRequests = async (req: Request, res: Response) => {
         return res.status(http.OK).json(rows);
     } catch (e) {
         console.error("listDirectRequests", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -635,14 +635,14 @@ export const addDirectRequestReminder = async (req: Request, res: Response) => {
     try {
         const direct_request_id = Number(req.params.directRequestId);
         const dr = await FastTrackRequest.findByPk(direct_request_id);
-        if (!dr) return res.status(http.NOT_FOUND).json({message: "Direct request not found"});
+        if (!dr) return res.status(http.NOT_FOUND).json({ message: "Direct request not found" });
 
-        const {task_title, task_date, note} = req.body;
-        const r = await FastTrackReminder.create({direct_request_id, task_title, task_date, note});
+        const { task_title, task_date, note } = req.body;
+        const r = await FastTrackReminder.create({ direct_request_id, task_title, task_date, note });
         return res.status(http.CREATED).json(r);
     } catch (e) {
         console.error("addDirectRequestReminder", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -651,7 +651,7 @@ export const buildBestMatches = async (req: Request, res: Response) => {
     try {
         const direct_request_id = Number(req.params.directRequestId);
         const dr = await FastTrackRequest.findByPk(direct_request_id);
-        if (!dr) return res.status(http.NOT_FOUND).json({message: "Direct request not found"});
+        if (!dr) return res.status(http.NOT_FOUND).json({ message: "Direct request not found" });
 
         const vehicles = await VehicleListing.findAll({
             where: {
@@ -660,16 +660,16 @@ export const buildBestMatches = async (req: Request, res: Response) => {
                 model: dr.vehicle_model,
                 grade: dr.grade,
                 manufacture_year: dr.manufacture_year,
-                mileage: {[Op.between]: [dr.mileage_min, dr.mileage_max]},
-                no_of_owners: {[Op.lte]: dr.no_of_owners},
-                price: {[Op.between]: [dr.price_from, dr.price_to]},
+                mileage: { [Op.between]: [dr.mileage_min, dr.mileage_max] },
+                no_of_owners: { [Op.lte]: dr.no_of_owners },
+                price: { [Op.between]: [dr.price_from, dr.price_to] },
             },
         });
 
         const createdOrExisting = await Promise.all(
             vehicles.map(async (v: any) => {
                 const existing = await FastTrackBestMatch.findOne({
-                    where: {direct_request_id, vehicle_id: v.id},
+                    where: { direct_request_id, vehicle_id: v.id },
                 });
                 if (existing) return existing;
                 return FastTrackBestMatch.create({
@@ -683,7 +683,7 @@ export const buildBestMatches = async (req: Request, res: Response) => {
         return res.status(http.OK).json(createdOrExisting);
     } catch (e) {
         console.error("buildBestMatches", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -692,11 +692,11 @@ export const getVehicleDetails = async (req: Request, res: Response) => {
     try {
         const id = Number(req.params.vehicleId);
         const v = await VehicleListing.findByPk(id);
-        if (!v) return res.status(http.NOT_FOUND).json({message: "Vehicle not found"});
+        if (!v) return res.status(http.NOT_FOUND).json({ message: "Vehicle not found" });
         return res.status(http.OK).json(v);
     } catch (e) {
         console.error("getVehicleDetails", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -705,21 +705,21 @@ export const assignBestMatchToSale = async (req: Request, res: Response) => {
     try {
         const direct_request_id = Number(req.params.directRequestId);
         const vehicle_id = Number(req.params.vehicleId);
-        const {salesUserId} = req.body;
+        const { salesUserId } = req.body;
 
         const dr = await FastTrackRequest.findByPk(direct_request_id);
-        if (!dr) return res.status(http.NOT_FOUND).json({message: "Direct request not found"});
+        if (!dr) return res.status(http.NOT_FOUND).json({ message: "Direct request not found" });
 
         const creatorUser = await User.findByPk(dr.call_agent_id);
 
         if (!creatorUser) {
-            return res.status(http.BAD_REQUEST).json({message: "Creator user not found"});
+            return res.status(http.BAD_REQUEST).json({ message: "Creator user not found" });
         }
 
         const userBranch = creatorUser.branch;
 
         const v = await VehicleListing.findByPk(vehicle_id);
-        if (!v) return res.status(http.NOT_FOUND).json({message: "Vehicle not found"});
+        if (!v) return res.status(http.NOT_FOUND).json({ message: "Vehicle not found" });
 
         const sale = await FastTrackSale.create({
             ticket_number: `IMS${Date.now()}`,
@@ -736,7 +736,7 @@ export const assignBestMatchToSale = async (req: Request, res: Response) => {
             priority: 0,
         });
 
-        await dr.update({status: "ASSIGNED"});
+        await dr.update({ status: "ASSIGNED" });
 
 
         const creatorId = dr.call_agent_id;
@@ -762,7 +762,7 @@ export const assignBestMatchToSale = async (req: Request, res: Response) => {
         return res.status(http.CREATED).json(sale);
     } catch (e) {
         console.error("assignBestMatchToSale", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -770,10 +770,10 @@ export const assignBestMatchToSale = async (req: Request, res: Response) => {
 export const claimSaleLead = async (req: Request, res: Response) => {
     try {
         const saleId = Number(req.params.saleId);
-        const {userId} = req.body;
+        const { userId } = req.body;
 
         const sale = await FastTrackSale.findByPk(saleId);
-        if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+        if (!sale) return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
 
         sale.assigned_sales_id = userId;
         sale.status = "ONGOING";
@@ -791,7 +791,7 @@ export const claimSaleLead = async (req: Request, res: Response) => {
         return res.status(http.OK).json(sale);
     } catch (e) {
         console.error("claimSaleLead", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -799,13 +799,13 @@ export const claimSaleLead = async (req: Request, res: Response) => {
 export const updateSaleStatus = async (req: Request, res: Response) => {
     try {
         const saleId = Number(req.params.saleId);
-        const {status} = req.body as { status: "WON" | "LOST" | "ONGOING" };
+        const { status } = req.body as { status: "WON" | "LOST" | "ONGOING" };
 
         // if (!["WON", "LOST"].includes(status))
         //     return res.status(http.BAD_REQUEST).json({message: "Invalid status"});
 
         const sale = await FastTrackSale.findByPk(saleId);
-        if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+        if (!sale) return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
         // if (sale.status !== "ONGOING")
         //     return res.status(http.BAD_REQUEST).json({message: "Only ONGOING can be closed"});
 
@@ -826,7 +826,7 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
         return res.status(http.OK).json(sale);
     } catch (e) {
         console.error("updateSaleStatus", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -834,10 +834,10 @@ export const updateSaleStatus = async (req: Request, res: Response) => {
 export const updateSalePriority = async (req: Request, res: Response) => {
     try {
         const saleId = Number(req.params.saleId);
-        const {priority} = req.body as { priority: number };
+        const { priority } = req.body as { priority: number };
 
         const sale = await FastTrackSale.findByPk(saleId);
-        if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+        if (!sale) return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
 
         const oldPriority = sale.priority;
 
@@ -856,7 +856,7 @@ export const updateSalePriority = async (req: Request, res: Response) => {
         return res.status(http.OK).json(sale);
     } catch (e) {
         console.error("updateSalePriority", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -877,7 +877,7 @@ export const updateSalePriority = async (req: Request, res: Response) => {
 
 export const createSaleFollowup = async (req: Request, res: Response) => {
     try {
-        const {sale_id, activity, activity_date, userId} = req.body;
+        const { sale_id, activity, activity_date, userId } = req.body;
 
         const followup = await FastTrackFollowup.create({
             activity,
@@ -887,20 +887,20 @@ export const createSaleFollowup = async (req: Request, res: Response) => {
         });
 
         const fullFollowup = await FastTrackFollowup.findByPk(followup.id, {
-            include: [{model: User, as: "creator", attributes: ["full_name"]}]
+            include: [{ model: User, as: "creator", attributes: ["full_name"] }]
         });
 
-        res.status(201).json({message: "Follow-up created", followup: fullFollowup});
+        res.status(201).json({ message: "Follow-up created", followup: fullFollowup });
     } catch (error) {
         console.error("Error creating follow-up:", error);
-        res.status(500).json({message: "Server error"});
+        res.status(500).json({ message: "Server error" });
     }
 };
 
 
 export const createSaleReminder = async (req: Request, res: Response) => {
     try {
-        const {sale_id, task_title, task_date, note, userId} = req.body;
+        const { sale_id, task_title, task_date, note, userId } = req.body;
 
         const followup = await FastTrackReminder.create({
             task_title,
@@ -911,13 +911,13 @@ export const createSaleReminder = async (req: Request, res: Response) => {
         });
 
         const fullFollowup = await FastTrackReminder.findByPk(followup.id, {
-            include: [{model: User, as: "creator", attributes: ["full_name"]}]
+            include: [{ model: User, as: "creator", attributes: ["full_name"] }]
         });
 
-        res.status(201).json({message: "Follow-up created", followup: fullFollowup});
+        res.status(201).json({ message: "Follow-up created", followup: fullFollowup });
     } catch (error) {
         console.error("Error creating follow-up:", error);
-        res.status(500).json({message: "Server error"});
+        res.status(500).json({ message: "Server error" });
     }
 };
 
@@ -939,31 +939,31 @@ export const createSaleReminder = async (req: Request, res: Response) => {
 
 export const getSaleByTicket = async (req: Request, res: Response) => {
     try {
-        const {ticket} = req.params;
+        const { ticket } = req.params;
         const sale = await FastTrackSale.findOne({
-            where: {ticket_number: ticket},
+            where: { ticket_number: ticket },
             include: [
-                {model: Customer, as: "customer"},
-                {model: VehicleListing, as: "vehicle"},
+                { model: Customer, as: "customer" },
+                { model: VehicleListing, as: "vehicle" },
                 {
                     model: FastTrackFollowup, as: "followups",
                     include: [
-                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                        { model: User, as: "creator", attributes: ["full_name", "user_role"] }
                     ]
                 },
                 {
                     model: FastTrackReminder, as: "saleReminders",
                     include: [
-                        {model: User, as: "creator", attributes: ["full_name", "user_role"]}
+                        { model: User, as: "creator", attributes: ["full_name", "user_role"] }
                     ]
                 },
             ],
         });
-        if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+        if (!sale) return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
         return res.status(http.OK).json(sale);
     } catch (e) {
         console.error("getSaleByTicket", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -1053,7 +1053,7 @@ export const listSales = async (req: Request, res: Response) => {
         const currentUser = await User.findByPk(userId);
 
         if (!currentUser) {
-            return res.status(http.UNAUTHORIZED).json({message: "User not authenticated"});
+            return res.status(http.UNAUTHORIZED).json({ message: "User not authenticated" });
         }
 
         const userRole = (req as any).user?.user_role || req.query.userRole;
@@ -1064,7 +1064,12 @@ export const listSales = async (req: Request, res: Response) => {
         const statusParam = req.query.status;
         const status = typeof statusParam === "string" ? statusParam.toUpperCase() : undefined;
 
-        const {assigned_sales_id} = req.query;
+        const { assigned_sales_id } = req.query;
+
+        const search = req.query.search as string;
+        const priority = req.query.priority as string;
+        const startDate = req.query.startDate as string;
+        const endDate = req.query.endDate as string;
 
         let whereClause: any = {};
 
@@ -1072,14 +1077,49 @@ export const listSales = async (req: Request, res: Response) => {
             whereClause.assigned_sales_id = Number(assigned_sales_id);
         }
 
+        // 1. Base Filters
+        if (search) {
+            whereClause[Op.or] = [
+                { ticket_number: { [Op.like]: `%${search}%` } },
+                { '$customers.customer_name$': { [Op.like]: `%${search}%` } }, // Note: FastTrackSale association is 'customers' (plural) in listSales usually? Checking include... listSales has 'customer' (singular) in line 1112. Wait, line 461 has 'customers' but line 1112 has 'customer'. Checking line 1112... it says 'customer'. 
+                // However, I should check the association alias in model definition or previous include.
+                // In line 1112: { model: Customer, as: "customer" }. So use '$customer...'.
+                { '$customer.customer_name$': { [Op.like]: `%${search}%` } },
+                { '$customer.phone_number$': { [Op.like]: `%${search}%` } },
+                { '$customer.email$': { [Op.like]: `%${search}%` } }
+            ];
+        }
+
+        if (priority) {
+            const pVal = priority.toUpperCase().replace("P", "");
+            if (!isNaN(Number(pVal))) {
+                whereClause.priority = Number(pVal);
+            }
+        }
+
+        if (startDate && endDate) {
+            whereClause.createdAt = {
+                [Op.between]: [new Date(startDate), new Date(endDate)]
+            };
+        } else if (startDate) {
+            whereClause.createdAt = {
+                [Op.gte]: new Date(startDate)
+            };
+        } else if (endDate) {
+            whereClause.createdAt = {
+                [Op.lte]: new Date(endDate)
+            };
+        }
+
+
         if (userRole === "ADMIN") {
-            if (status) whereClause.status = status;
+            if (status && status !== "ALL STATUS") whereClause.status = status;
         } else {
             whereClause.branch = userBranch;
             if (userLevel > 0) {
                 whereClause.current_level = userLevel;
 
-                if (status) {
+                if (status && status !== "ALL STATUS") {
                     if (status === "NEW") {
                         whereClause.status = "NEW";
                     } else {
@@ -1088,15 +1128,14 @@ export const listSales = async (req: Request, res: Response) => {
                     }
                 } else {
                     whereClause[Op.and] = [
-                        {current_level: userLevel},
-                        {branch: userBranch},
+                        ...(whereClause[Op.and] || []),
                         {
                             [Op.or]: [
-                                {status: "NEW"},
+                                { status: "NEW" },
                                 {
                                     [Op.and]: [
-                                        {status: {[Op.ne]: "NEW"}},
-                                        {assigned_sales_id: userId}
+                                        { status: { [Op.ne]: "NEW" } },
+                                        { assigned_sales_id: userId }
                                     ]
                                 }
                             ]
@@ -1109,9 +1148,9 @@ export const listSales = async (req: Request, res: Response) => {
         const rows = await FastTrackSale.findAll({
             where: whereClause,
             include: [
-                {model: Customer, as: "customer"},
-                {model: VehicleListing, as: "vehicle"},
-                {model: User, as: "salesUser", attributes: ["id", "full_name"]},
+                { model: Customer, as: "customer" },
+                { model: VehicleListing, as: "vehicle" },
+                { model: User, as: "salesUser", attributes: ["id", "full_name"] },
             ],
             order: [["createdAt", "DESC"]],
         });
@@ -1119,7 +1158,7 @@ export const listSales = async (req: Request, res: Response) => {
         return res.status(http.OK).json(rows);
     } catch (e) {
         console.error("listSales", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -1127,13 +1166,13 @@ export const listSales = async (req: Request, res: Response) => {
 export const promoteToNextLevel = async (req: Request, res: Response) => {
     const t = await db.sequelize.transaction();
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const userId = (req as any).user?.id || req.body.userId;
 
         const sale = await FastTrackSale.findByPk(id);
         if (!sale) {
             await t.rollback();
-            return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+            return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
         }
 
         const currentLevel = sale.current_level;
@@ -1141,13 +1180,13 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
 
         if (nextLevel > 3) {
             await t.rollback();
-            return res.status(http.BAD_REQUEST).json({message: "Already at maximum sales level"});
+            return res.status(http.BAD_REQUEST).json({ message: "Already at maximum sales level" });
         }
 
         sale.status = "NEW";
         sale.current_level = nextLevel;
         sale.assigned_sales_id = null;
-        await sale.save({transaction: t});
+        await sale.save({ transaction: t });
 
         await FastTrackSaleHistory.create({
             fast_track_sale_id: sale.id,
@@ -1157,7 +1196,7 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
             new_level: nextLevel,
             details: `Lead escalated from Level ${currentLevel} to Level ${nextLevel}`,
             timestamp: new Date()
-        } as any, {transaction: t});
+        } as any, { transaction: t });
 
         await t.commit();
 
@@ -1170,26 +1209,26 @@ export const promoteToNextLevel = async (req: Request, res: Response) => {
             changes: { ticket: sale.ticket_number, previousLevel: currentLevel, newLevel: nextLevel }
         });
 
-        res.status(http.OK).json({message: `Lead promoted to Sales Level ${nextLevel}`, sale});
+        res.status(http.OK).json({ message: `Lead promoted to Sales Level ${nextLevel}`, sale });
 
     } catch (error) {
         await t.rollback();
         console.error("Error promoting sale:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
 export const getSaleHistory = async (req: Request, res: Response) => {
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const history = await FastTrackSaleHistory.findAll({
-            where: {fast_track_sale_id: id},
+            where: { fast_track_sale_id: id },
             order: [["timestamp", "DESC"]],
-            include: [{model: User, as: "actor", attributes: ['full_name', 'user_role']}]
+            include: [{ model: User, as: "actor", attributes: ['full_name', 'user_role'] }]
         });
         res.status(http.OK).json(history);
     } catch (error) {
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Error fetching history"});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error fetching history" });
     }
 };
 
@@ -1198,28 +1237,28 @@ export const getDirectReminders = async (req: Request, res: Response) => {
     try {
         const direct_request_id = Number(req.params.directRequestId);
         const dr = await FastTrackRequest.findByPk(direct_request_id);
-        if (!dr) return res.status(http.NOT_FOUND).json({message: "Direct request not found"});
+        if (!dr) return res.status(http.NOT_FOUND).json({ message: "Direct request not found" });
 
         const rows = await FastTrackReminder.findAll({
-            where: {direct_request_id},
+            where: { direct_request_id },
             order: [["task_date", "ASC"]],
         });
         return res.status(http.OK).json(rows);
     } catch (e) {
         console.error("getDirectReminders", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
 export const getAllDirectReminders = async (req: Request, res: Response) => { // NEW: All reminders
     try {
         const rows = await FastTrackReminder.findAll({
-            where: {sale_id: null},
+            where: { sale_id: null },
             include: [
                 {
                     model: FastTrackRequest,
                     as: "directRequest",
-                    include: [{model: Customer, as: "customer"}],
+                    include: [{ model: Customer, as: "customer" }],
                 },
             ],
             order: [["task_date", "ASC"]],
@@ -1227,7 +1266,7 @@ export const getAllDirectReminders = async (req: Request, res: Response) => { //
         return res.status(http.OK).json(rows);
     } catch (e) {
         console.error("getAllDirectReminders", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -1235,15 +1274,15 @@ export const getBestMatches = async (req: Request, res: Response) => { // NEW: G
     try {
         const direct_request_id = Number(req.params.directRequestId);
         const dr = await FastTrackRequest.findByPk(direct_request_id);
-        if (!dr) return res.status(http.NOT_FOUND).json({message: "Direct request not found"});
+        if (!dr) return res.status(http.NOT_FOUND).json({ message: "Direct request not found" });
         const rows = await FastTrackBestMatch.findAll({
-            where: {direct_request_id},
-            include: [{model: VehicleListing, as: "vehicle"}],
+            where: { direct_request_id },
+            include: [{ model: VehicleListing, as: "vehicle" }],
         });
         return res.status(http.OK).json(rows);
     } catch (e) {
         console.error("getBestMatches", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -1252,16 +1291,16 @@ export const getSaleReminders = async (req: Request, res: Response) => {
     try {
         const sale_id = Number(req.params.saleId);
         const sale = await FastTrackSale.findByPk(sale_id);
-        if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+        if (!sale) return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
 
         const rows = await FastTrackReminder.findAll({
-            where: {sale_id},
+            where: { sale_id },
             order: [["task_date", "ASC"]],
         });
         return res.status(http.OK).json(rows);
     } catch (e) {
         console.error("getSaleReminders", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -1269,16 +1308,16 @@ export const getSaleFollowups = async (req: Request, res: Response) => {
     try {
         const sale_id = Number(req.params.saleId);
         const sale = await FastTrackSale.findByPk(sale_id);
-        if (!sale) return res.status(http.NOT_FOUND).json({message: "Sale not found"});
+        if (!sale) return res.status(http.NOT_FOUND).json({ message: "Sale not found" });
 
         const rows = await FastTrackFollowup.findAll({
-            where: {sale_id},
+            where: { sale_id },
             order: [["activity_date", "DESC"]],
         });
         return res.status(http.OK).json(rows);
     } catch (e) {
         console.error("getSaleFollowups", e);
-        return res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error"});
+        return res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error" });
     }
 };
 
@@ -1308,19 +1347,19 @@ export const createSaleDirect = async (req: Request, res: Response) => {
 
         if (!is_self_assigned || !sales_user_id) {
             await t.rollback();
-            return res.status(http.BAD_REQUEST).json({message: "Invalid request: Missing user ID or flag"});
+            return res.status(http.BAD_REQUEST).json({ message: "Invalid request: Missing user ID or flag" });
         }
 
         const creatorUser = await User.findByPk(sales_user_id);
 
         if (!creatorUser) {
-            return res.status(http.BAD_REQUEST).json({message: "Creator user not found"});
+            return res.status(http.BAD_REQUEST).json({ message: "Creator user not found" });
         }
 
         const userBranch = creatorUser.branch;
 
         // 1. Find or Create Customer
-        let customer = await Customer.findOne({where: {phone_number: contact_number}, transaction: t});
+        let customer = await Customer.findOne({ where: { phone_number: contact_number }, transaction: t });
         if (!customer) {
             customer = await Customer.create({
                 id: `CUS${Date.now()}`,
@@ -1329,7 +1368,7 @@ export const createSaleDirect = async (req: Request, res: Response) => {
                 email,
                 city,
                 lead_source: lead_source || "Direct"
-            }, {transaction: t});
+            }, { transaction: t });
         }
 
         // 2. Create Placeholder Direct Request
@@ -1349,7 +1388,7 @@ export const createSaleDirect = async (req: Request, res: Response) => {
             no_of_owners: 0,
             price_from: 0,
             price_to: 0
-        }, {transaction: t});
+        }, { transaction: t });
 
         // 3. Create Placeholder Vehicle Listing
         // We need a vehicle_id. Since we don't have a real inventory item yet, create a placeholder.
@@ -1369,7 +1408,7 @@ export const createSaleDirect = async (req: Request, res: Response) => {
             capacity: "0",
             color: "N/A",
             vehicle_no: `TEMP-${Date.now()}` // Unique temp ID
-        }, {transaction: t});
+        }, { transaction: t });
 
         // 4. Determine Level
         let currentLevel = 1;
@@ -1397,7 +1436,7 @@ export const createSaleDirect = async (req: Request, res: Response) => {
             price_range_max: 0,
             additional_note: additional_note,
             priority: priority || 0
-        }, {transaction: t});
+        }, { transaction: t });
 
         // 6. Log History
         await FastTrackSaleHistory.create({
@@ -1408,7 +1447,7 @@ export const createSaleDirect = async (req: Request, res: Response) => {
             new_level: currentLevel,
             details: `Lead created and self-assigned by Sales Agent`,
             timestamp: new Date()
-        } as any, {transaction: t});
+        } as any, { transaction: t });
 
         await t.commit();
 
@@ -1434,11 +1473,11 @@ export const createSaleDirect = async (req: Request, res: Response) => {
         }
 
 
-        res.status(http.CREATED).json({message: "Sale created successfully", sale: newSale});
+        res.status(http.CREATED).json({ message: "Sale created successfully", sale: newSale });
 
     } catch (error: any) {
         await t.rollback();
         console.error("createSaleDirect error:", error);
-        res.status(http.INTERNAL_SERVER_ERROR).json({message: "Server error", detail: error.message});
+        res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Server error", detail: error.message });
     }
 };
