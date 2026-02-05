@@ -83,9 +83,9 @@ export const getScheduledServices = async (req: Request, res: Response) => {
       order: [["start_time", "ASC"]], // Order by time, earliest first
     });
 
-    
+
     const response = bookings.map((booking) => {
-      
+
       const serviceLine = (booking as any).ServiceLine;
       const customer = (booking as any).Customer;
       const vehicle = (booking as any).vehicle;
@@ -101,6 +101,7 @@ export const getScheduledServices = async (req: Request, res: Response) => {
         start_time: booking.start_time.slice(0, 5), // HH:mm format
         end_time: booking.end_time.slice(0, 5), // HH:mm format
         booking_date: booking.booking_date, // YYYY-MM-DD format
+        status: booking.status, // BOOKED, PENDING, COMPLETED, CANCELLED, etc.
       };
     });
 

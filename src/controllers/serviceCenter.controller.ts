@@ -2,8 +2,9 @@ import { Request, Response } from "express";
 import http from "http-status-codes";
 import db from "../models";
 import { Op } from "sequelize";
+import jwt from "jsonwebtoken";
 
-const { Service, ServiceParkBooking, Customer, ServiceLine, ServiceParkVehicleHistory } = db;
+const { Service, ServiceParkBooking, Customer, ServiceLine, ServiceParkVehicleHistory, Branch } = db;
 
 // Helper function to parse odometer/mileage strings like "234567km" to integer
 function parseOdometerOrMileage(value: string | null | undefined): number | null {
@@ -22,13 +23,14 @@ function formatOdometerOrMileage(value: number | null | undefined): string | nul
     return `${value}km`;
 }
 
-function toBookingDto(b: any) {
+function toBookingDto(b: any, includeBranch: boolean = false) {
     const sl = b.ServiceLine;
     const cust = b.Customer;
     const vehicle = b.vehicle;
+    const branch = b.Branch;
     const st = b.start_time ? String(b.start_time).slice(0, 5) : "";
     const et = b.end_time ? String(b.end_time).slice(0, 5) : "";
-    return {
+    const result: any = {
         id: b.id,
         date: b.booking_date,
         start_time: st,
@@ -48,6 +50,13 @@ function toBookingDto(b: any) {
         line_id: sl?.id ?? null,
         service_type: sl?.type ?? null,
     };
+    
+    if (includeBranch) {
+        result.branch_id = b.branch_id ?? null;
+        result.branch_name = branch?.name ?? null;
+    }
+    
+    return result;
 }
 
 export const getServiceTypes = async (req: Request, res: Response) => {
@@ -129,6 +138,262 @@ export const getBookings = async (req: Request, res: Response) => {
         return res.status(http.INTERNAL_SERVER_ERROR).json({
             message: "Error fetching bookings",
             error: error.message,
+        });
+    }
+}
+
+export const getAllBookings = async (req: Request, res: Response) => {
+    try {
+        const branchId = req.query.branchId ? Number(req.query.branchId) : undefined;
+        const startDate = req.query.startDate as string | undefined;
+        const endDate = req.query.endDate as string | undefined;
+        const lineId = req.query.lineId ? Number(req.query.lineId) : undefined;
+        const serviceType = (req.query.serviceType as string) || undefined;
+
+        // Validate required branchId
+        if (!branchId || isNaN(branchId) || branchId < 1) {
+            return res.status(http.BAD_REQUEST).json({
+                message: "branchId is required and must be a positive number",
+            });
+        }
+
+        // Validate date formats if provided
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (startDate && !dateRegex.test(startDate)) {
+            return res.status(http.BAD_REQUEST).json({
+                message: "startDate must be in YYYY-MM-DD format",
+            });
+        }
+        if (endDate && !dateRegex.test(endDate)) {
+            return res.status(http.BAD_REQUEST).json({
+                message: "endDate must be in YYYY-MM-DD format",
+            });
+        }
+
+        // Validate serviceType if provided
+        if (serviceType && !["REPAIR", "PAINT", "ADDON"].includes(serviceType)) {
+            return res.status(http.BAD_REQUEST).json({
+                message: "Invalid serviceType. Must be REPAIR, PAINT, or ADDON",
+            });
+        }
+
+        // Build where clause
+        const where: Record<string, unknown> = {
+            branch_id: branchId,
+        };
+
+        // Date range filtering
+        if (startDate && endDate) {
+            where.booking_date = { [Op.between]: [startDate, endDate] };
+        } else if (startDate) {
+            where.booking_date = { [Op.gte]: startDate };
+        } else if (endDate) {
+            where.booking_date = { [Op.lte]: endDate };
+        }
+
+        // Line filter
+        if (lineId != null && !isNaN(lineId)) {
+            where.service_line_id = lineId;
+        }
+
+        // Service line include configuration
+        const serviceLineInclude: { model: typeof ServiceLine; attributes: string[]; required?: boolean; where?: { type: string } } = {
+            model: ServiceLine,
+            attributes: ["id", "name", "type"],
+            required: false, 
+        };
+        if (serviceType) {
+            serviceLineInclude.where = { type: serviceType };
+            serviceLineInclude.required = true; 
+        }
+
+        const bookings = await ServiceParkBooking.findAll({
+            where,
+            include: [
+                { model: Customer, attributes: ["id", "customer_name", "phone_number", "email"], required: false },
+                {
+                    model: ServiceParkVehicleHistory,
+                    as: "vehicle",
+                    attributes: ["address", "odometer", "mileage", "oil_type", "service_advisor", "vehicle_model", "vehicle_make"],
+                    required: false,
+                },
+                serviceLineInclude,
+            ],
+            order: [["booking_date", "ASC"], ["start_time", "ASC"]],
+        });
+
+        const list = bookings.map((b: any) => toBookingDto(b));
+
+        return res.status(http.OK).json(list);
+    } catch (error: any) {
+        console.error("getAllBookings error:", error);
+        return res.status(http.INTERNAL_SERVER_ERROR).json({
+            message: "Failed to fetch bookings: " + error.message,
+        });
+    }
+}
+
+export const getBookingReports = async (req: Request, res: Response) => {
+    try {
+        // Extract and validate required parameters
+        const startDate = req.query.startDate as string | undefined;
+        const endDate = req.query.endDate as string | undefined;
+        const branchId = req.query.branchId ? Number(req.query.branchId) : undefined;
+        const lineId = req.query.lineId ? Number(req.query.lineId) : undefined;
+        const serviceType = (req.query.serviceType as string) || undefined;
+        const page = req.query.page ? Number(req.query.page) : undefined;
+        const limit = req.query.limit ? Number(req.query.limit) : undefined;
+
+        // Validate required parameters
+        if (!startDate || !endDate) {
+            return res.status(http.BAD_REQUEST).json({
+                message: "startDate and endDate are required",
+            });
+        }
+
+        if (!page || !limit) {
+            return res.status(http.BAD_REQUEST).json({
+                message: "page and limit are required",
+            });
+        }
+
+        // Validate page and limit values
+        if (isNaN(page) || page < 1) {
+            return res.status(http.BAD_REQUEST).json({
+                message: "page must be a positive number (1 or greater)",
+            });
+        }
+
+        if (isNaN(limit) || limit < 1) {
+            return res.status(http.BAD_REQUEST).json({
+                message: "limit must be a positive number (1 or greater)",
+            });
+        }
+
+        // Validate date formats
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(startDate)) {
+            return res.status(http.BAD_REQUEST).json({
+                message: "startDate must be in YYYY-MM-DD format",
+            });
+        }
+        if (!dateRegex.test(endDate)) {
+            return res.status(http.BAD_REQUEST).json({
+                message: "endDate must be in YYYY-MM-DD format",
+            });
+        }
+
+        // Validate serviceType if provided
+        if (serviceType && !["REPAIR", "PAINT", "ADDON"].includes(serviceType)) {
+            return res.status(http.BAD_REQUEST).json({
+                message: "Invalid serviceType. Must be REPAIR, PAINT, or ADDON",
+            });
+        }
+
+        // Check authorization: if branchId is omitted, user must be ADMIN
+        if (!branchId) {
+            let userRole: string | undefined;
+
+            if ((req as any).user) {
+                userRole = (req as any).user?.role || (req as any).user?.user_role;
+            }
+            
+            if (!userRole) {
+                try {
+                    const authHeader = req.headers.authorization;
+                    if (authHeader && authHeader.startsWith('Bearer ')) {
+                        const token = authHeader.substring(7);
+                        const jwtSecret = process.env.JWT_SECRET;
+                        if (jwtSecret) {
+                            const decoded = jwt.verify(token, jwtSecret) as any;
+                            userRole = decoded.role || decoded.user_role;
+                        }
+                    }
+                } catch (error) {
+                    console.log('[getBookingReports] JWT verification failed:', error);
+                }
+            }
+
+            console.log('[getBookingReports] Authorization check:', {
+                hasUser: !!(req as any).user,
+                userObject: (req as any).user,
+                userRole: userRole,
+                isAdmin: userRole === "ADMIN",
+                hasAuthHeader: !!req.headers.authorization
+            });
+            
+            if (!userRole || userRole !== "ADMIN") {
+                return res.status(http.FORBIDDEN).json({
+                    message: "Access denied. Admin role required to view all branches",
+                });
+            }
+        }
+
+        const where: Record<string, unknown> = {};
+
+        where.booking_date = { [Op.between]: [startDate, endDate] };
+
+        if (branchId != null && !isNaN(branchId) && branchId > 0) {
+            where.branch_id = branchId;
+        }
+
+        if (branchId != null && lineId != null && !isNaN(lineId)) {
+            where.service_line_id = lineId;
+        }
+
+        const serviceLineInclude: { model: typeof ServiceLine; attributes: string[]; required?: boolean; where?: { type: string } } = {
+            model: ServiceLine,
+            attributes: ["id", "name", "type"],
+            required: false,
+        };
+        if (serviceType) {
+            serviceLineInclude.where = { type: serviceType };
+            serviceLineInclude.required = true;
+        }
+
+        const includeBranch = !branchId;
+        const includes: any[] = [
+            { model: Customer, attributes: ["id", "customer_name", "phone_number", "email"], required: false },
+            {
+                model: ServiceParkVehicleHistory,
+                as: "vehicle",
+                attributes: ["address", "odometer", "mileage", "oil_type", "service_advisor", "vehicle_model", "vehicle_make"],
+                required: false,
+            },
+            serviceLineInclude,
+        ];
+
+        if (includeBranch) {
+            includes.push({ model: Branch, attributes: ["id", "name"], required: false });
+        }
+
+        const offset = (page - 1) * limit;
+
+        const total = await ServiceParkBooking.count({
+            where,
+            include: serviceType ? [serviceLineInclude] : [],
+            distinct: true,
+            col: 'id'
+        });
+
+        const bookings = await ServiceParkBooking.findAll({
+            where,
+            include: includes,
+            order: [["booking_date", "ASC"], ["start_time", "ASC"]],
+            limit: limit,
+            offset: offset,
+        });
+
+        const data = bookings.map((b: any) => toBookingDto(b, includeBranch));
+
+        return res.status(http.OK).json({
+            data,
+            total,
+        });
+    } catch (error: any) {
+        console.error("getBookingReports error:", error);
+        return res.status(http.INTERNAL_SERVER_ERROR).json({
+            message: "Failed to fetch bookings: " + error.message,
         });
     }
 }
@@ -264,16 +529,16 @@ export const createBooking = async (req: Request, res: Response) => {
                 email: trimmedEmail,
                 vehicle_number: trimmedVehicleNo,
                 convenient_branch: trimmedServiceCenter,
-                gender: null,  
+                gender: null,
                 lead_source: "Walk In"
             } as any);
         } else {
-            
+
             const customerUpdates: any = {};
             if (trimmedEmail && !customer.email) customerUpdates.email = trimmedEmail;
             if (trimmedVehicleNo && !customer.vehicle_number) customerUpdates.vehicle_number = trimmedVehicleNo;
             if (trimmedServiceCenter && !customer.convenient_branch) customerUpdates.convenient_branch = trimmedServiceCenter;
-            
+
             if (Object.keys(customerUpdates).length > 0) {
                 await customer.update(customerUpdates);
             }
@@ -295,7 +560,7 @@ export const createBooking = async (req: Request, res: Response) => {
                 mileage: parsedMileage ?? null,
                 oil_type: trimmedOilType,
                 service_advisor: trimmedServiceAdvisor,
-                service_center: trimmedServiceCenter, 
+                service_center: trimmedServiceCenter,
             } as any);
         } else {
             // Update vehicle history with new data if provided
