@@ -567,6 +567,8 @@ export const listServiceParkSales = async (req: Request, res: Response) => {
                     }
                 } else {
                     whereClause[Op.and] = [
+                        { current_level: userLevel },
+                        { branch: userBranch },
                         ...(whereClause[Op.and] || []),
                         {
                             [Op.or]: [

@@ -10,6 +10,7 @@ dotenv.config();
 
 const {
     User,
+    Branch,
     VehicleSale,
     VehicleSaleHistory,
     FastTrackSale,
@@ -30,6 +31,7 @@ interface AuthenticatedRequest extends Request {
 interface JwtUserPayload {
     id: number;
     role: string;
+    branch_id?: number;
 }
 
 export const generateToken = (user: JwtUserPayload) => {
@@ -143,16 +145,66 @@ export const login = async (req: Request, res: Response) => {
             return res.status(http.UNAUTHORIZED).json({ message: "User not found" });
         }
 
+        // Debug: Log user_role from database
+        console.log('[Login Debug] User found:', {
+            id: user.id,
+            email: user.email,
+            user_role: user.user_role,
+            user_role_raw: user.getDataValue('user_role'),
+            branch: user.branch
+        });
+
         const passwordMatch = await bcrypt.compare(password, user.password);
         if (!passwordMatch) {
             return res.status(http.UNAUTHORIZED).json({ message: "Invalid password" });
         }
 
-        const token = generateToken({
+        let branchId: number | null = null;
+
+        if (user.user_role === 'SERVICE_CENTER_STAFF'){
+            if(!user.branch){
+                return res.status(http.BAD_REQUEST).json({message: "User branch is not set"});
+            }
+
+            const branch = await Branch.findOne({
+                where: {name: user.branch}
+            });
+
+            if(!branch){
+                return res.status(http.BAD_REQUEST).json({message: "Branch not found for user"});
+            }
+
+            branchId = branch.id;
+        }
+
+        // Create token payload
+        const tokenPayload: JwtUserPayload = {
             id: user.id,
             role: user.user_role,
-        });
-        res.json({ user, accessToken: token });
+        };
+
+        // Add branch_id only for SERVICE_CENTER_STAFF
+        if (branchId !== null) {
+            tokenPayload.branch_id = branchId;
+        }
+
+        const token = generateToken(tokenPayload);
+
+        // Prepare response
+        const response: any = {
+            user,
+            accessToken: token
+        };
+
+        // Add branch_id only for SERVICE_CENTER_STAFF
+        if (branchId !== null) {
+            response.branch_id = branchId;
+        }
+
+        // Debug: Log final response
+        console.log('[Login Debug] Response user_role:', response.user.user_role);
+
+        res.json(response);
     } catch (err) {
         res.status(http.INTERNAL_SERVER_ERROR).json({ message: "Error logging user", err });
     }

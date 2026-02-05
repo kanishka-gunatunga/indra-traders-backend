@@ -81,7 +81,6 @@ export const getScheduledServices = async (req: Request, res: Response) => {
 
 
     const formattedBookings = bookings.map((booking) => {
-
       const serviceLine = (booking as any).ServiceLine;
       const customer = (booking as any).Customer;
       const vehicle = (booking as any).vehicle;
@@ -100,8 +99,9 @@ export const getScheduledServices = async (req: Request, res: Response) => {
         customer: customer?.customer_name || "N/A",
         service: serviceLine?.name || "N/A",
         technician: serviceLine?.advisor || "N/A",
-        start_time: booking.start_time.slice(0, 5),
-        end_time: booking.end_time.slice(0, 5),
+        start_time: booking.start_time.slice(0, 5), // HH:mm format
+        end_time: booking.end_time.slice(0, 5), // HH:mm format
+        status: booking.status, // BOOKED, PENDING, COMPLETED, CANCELLED, etc.
       };
     });
 

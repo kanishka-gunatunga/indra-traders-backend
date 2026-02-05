@@ -3,6 +3,8 @@ import {DataTypes, Model, Optional, Sequelize} from "sequelize";
 export interface VehicleHistoryAttributes {
     id: number;
     vehicle_no: string;
+    vehicle_model?: string; 
+    vehicle_make?: string;
     odometer: number;
     owner_name: string;
     contact_no: string;
@@ -27,6 +29,8 @@ export default (sequelize: Sequelize) => {
         implements VehicleHistoryAttributes {
         public id!: number;
         public vehicle_no!: string;
+        public vehicle_model?: string;
+        public vehicle_make?: string;
         public odometer!: number;
         public owner_name!: string;
         public contact_no!: string;
@@ -51,6 +55,14 @@ export default (sequelize: Sequelize) => {
                 type: DataTypes.STRING(50),
                 allowNull: false,
                 unique: true,
+            },
+            vehicle_model: {
+                type: DataTypes.STRING(255),
+                allowNull: true
+            },
+            vehicle_make: {
+                type: DataTypes.STRING(50),
+                allowNull: true
             },
             odometer: {
                 type: DataTypes.INTEGER,

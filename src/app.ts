@@ -25,6 +25,7 @@ import dashboardRoutes from "./routes/dashboard.routes";
 // import path from "node:path";
 // import indexRouter from './routes/index';
 import serviceBookingAuthRoutes from "./routes/serviceBookingAuth.routes";
+import serviceCenterRoutes from "./routes/serviceCenter.routes";
 
 import { handleFacebookMessage } from "./realtime/facebook";
 import path from "path";
@@ -113,6 +114,6 @@ app.use("/api/v1/admin", logsRoutes)
 app.use("/api/v1/notification", notificationRoutes)
 app.use("/api/v1", dashboardRoutes)
 app.use("/api/v1/service-booking", serviceBookingAuthRoutes);
-
+app.use("/api/v1/service-center", serviceCenterRoutes);
 
 export default app;
